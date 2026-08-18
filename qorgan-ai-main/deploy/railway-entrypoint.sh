@@ -6,9 +6,10 @@
 #
 #   1. bind the platform's $PORT and $HOST,
 #   2. take ownership of the mounted volume and DROP ROOT,
-#   3. refuse early if the signing key is missing,
-#   4. bring the schema to head,
-#   5. optionally create the FIRST account, once, and only when asked.
+#   3. lay down starting data, but only onto a volume that has none,
+#   4. refuse early if the signing key is missing,
+#   5. bring the schema to head,
+#   6. optionally create the FIRST account, once, and only when asked.
 
 set -eu
 
@@ -59,6 +60,35 @@ export DATABASE_URL="${DATABASE_URL:-sqlite+pysqlite:///$STATE/data/qorgan.sqlit
 export MEDIA_ROOT="${MEDIA_ROOT:-$STATE/media}"
 export LOG_DIR="${LOG_DIR:-$STATE/logs}"
 
+# ---------------------------------------------------------------------------
+# 3. Starting data, and ONLY onto an empty volume.
+#
+#    The image may carry a prepared database and the stills that go with it, in
+#    `qorgan-ai-main/seed/` — a directory that is EMPTY in the repository and is filled by
+#    whoever deploys the stand (see `seed/README.md`).
+#
+#    **An existing database is never touched.** A deployment that replaced a school's own
+#    records with a snapshot from somebody's laptop would be the worst kind of defect:
+#    silent, total, and indistinguishable from «импорт не сработал». So the copy happens
+#    only when there is no database on the volume at all.
+#
+#    Stills are ADDED rather than replaced (`cp -n`), so re-seeding cannot quietly swap a
+#    picture underneath a row that points at it.
+# ---------------------------------------------------------------------------
+SEED_DIR="${SEED_DIR:-/app/seed}"
+if [ "${SEED_ON_FIRST_BOOT:-1}" != "0" ] && [ -f "$SEED_DIR/qorgan.sqlite3" ]; then
+  if [ -f "$STATE/data/qorgan.sqlite3" ]; then
+    log "начальные данные пропущены: база на томе уже есть и не трогается"
+  else
+    cp "$SEED_DIR/qorgan.sqlite3" "$STATE/data/qorgan.sqlite3"
+    log "начальная база положена на том"
+    if [ -d "$SEED_DIR/media" ]; then
+      cp -Rn "$SEED_DIR/media/." "$STATE/media/" 2>/dev/null || true
+      log "кадры добавлены, файлов на томе: $(find "$STATE/media" -type f 2>/dev/null | wc -l | tr -d ' ')"
+    fi
+  fi
+fi
+
 case "$DATABASE_URL" in
   sqlite*)
     if [ ! -d "$STATE" ] || [ ! -w "$STATE" ]; then
@@ -72,7 +102,7 @@ case "$DATABASE_URL" in
 esac
 
 # ---------------------------------------------------------------------------
-# 3. The signing key. Checked HERE, before anything touches the database, because the
+# 4. The signing key. Checked HERE, before anything touches the database, because the
 #    application refuses to build its settings without one — and that refusal came out as a
 #    pydantic traceback repeated once per restart, ending in «Then set SECRET_KEY in
 #    /app/.env»: a file that does not exist in this container. The check below says the same
@@ -94,14 +124,14 @@ if [ -z "${SECRET_KEY:-}" ] || [ "${SECRET_KEY}" = "dev-only-insecure-key" ]; th
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Schema. Runs on every boot: `alembic upgrade head` is a no-op when there is nothing
+# 5. Schema. Runs on every boot: `alembic upgrade head` is a no-op when there is nothing
 #    to do, and the alternative is remembering to run it by hand exactly once.
 # ---------------------------------------------------------------------------
 log "миграции: alembic upgrade head"
 alembic -c /app/alembic.ini upgrade head
 
 # ---------------------------------------------------------------------------
-# 5. The first account. Deliberately NOT automatic: an account created from environment
+# 6. The first account. Deliberately NOT automatic: an account created from environment
 #    variables on every boot is a permanent back door. This runs only when both variables
 #    are present AND the table is empty, prints what it did, and tells the operator to
 #    remove the variables afterwards.

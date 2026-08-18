@@ -44,6 +44,15 @@ RUN pip install --no-deps -e .
 COPY qorgan-ai-main/deploy/railway-entrypoint.sh /usr/local/bin/qorgan-entrypoint
 RUN chmod +x /usr/local/bin/qorgan-entrypoint
 
+# Starting data for the stand: a prepared database and the stills that go with it. EMPTY in
+# the repository — whoever deploys fills `qorgan-ai-main/seed/` (see its README). The
+# entrypoint lays it onto the volume ONLY when the volume has no database, so a redeploy can
+# never replace a school's own records with a snapshot from somebody's laptop.
+#
+# In its own layer, and last: this is the part that changes when the demo data changes, and
+# it has no business invalidating the dependency install above it.
+COPY qorgan-ai-main/seed ./seed
+
 # Writable state lives on a mounted volume, never in the image layer: a container
 # filesystem is thrown away on every deploy, and this directory holds the database and
 # the school's media.
