@@ -6,8 +6,9 @@
 #
 #   1. bind the platform's $PORT and $HOST,
 #   2. put the writable state on the mounted volume,
-#   3. bring the schema to head,
-#   4. optionally create the FIRST account, once, and only when asked.
+#   3. refuse early if the signing key is missing,
+#   4. bring the schema to head,
+#   5. optionally create the FIRST account, once, and only when asked.
 
 set -eu
 
@@ -47,14 +48,36 @@ case "$DATABASE_URL" in
 esac
 
 # ---------------------------------------------------------------------------
-# 3. Schema. Runs on every boot: `alembic upgrade head` is a no-op when there is nothing
+# 3. The signing key. Checked HERE, before anything touches the database, because the
+#    application refuses to build its settings without one — and that refusal came out as a
+#    pydantic traceback repeated once per restart, ending in «Then set SECRET_KEY in
+#    /app/.env»: a file that does not exist in this container. The check below says the same
+#    thing in one screen, in the place the operator actually sets it.
+# ---------------------------------------------------------------------------
+if [ -z "${SECRET_KEY:-}" ] || [ "${SECRET_KEY}" = "dev-only-insecure-key" ]; then
+  log "ОТКАЗ: SECRET_KEY не задан."
+  log "       Им подписываются сессионные cookie. Со встроенным ключом их может подделать"
+  log "       любой, кто читал исходники, — а за ними живое видео и фотографии детей."
+  log ""
+  log "       1. Сгенерируйте ключ:"
+  log '            python -c "import secrets; print(secrets.token_urlsafe(48))"'
+  log "       2. Railway → ваш сервис → Variables → добавьте SECRET_KEY с этим значением."
+  log "       3. Разверните заново."
+  log ""
+  log "       Там же нужны QORGAN_ENV=prod и WEB_HTTPS=true — Railway терминирует TLS,"
+  log "       и при WEB_HTTPS=false браузер не вернёт cookie, а вход зациклится."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Schema. Runs on every boot: `alembic upgrade head` is a no-op when there is nothing
 #    to do, and the alternative is remembering to run it by hand exactly once.
 # ---------------------------------------------------------------------------
 log "миграции: alembic upgrade head"
 alembic -c /app/alembic.ini upgrade head
 
 # ---------------------------------------------------------------------------
-# 4. The first account. Deliberately NOT automatic: an account created from environment
+# 5. The first account. Deliberately NOT automatic: an account created from environment
 #    variables on every boot is a permanent back door. This runs only when both variables
 #    are present AND the table is empty, prints what it did, and tells the operator to
 #    remove the variables afterwards.

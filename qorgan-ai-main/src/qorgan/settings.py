@@ -140,12 +140,23 @@ class Settings(BaseSettings):
         else:
             return self  # loopback, dev: the developer's normal path
 
+        # WHERE to put the key depends on where this is running, and naming the wrong place
+        # is worse than naming none: on Railway the message used to say «set SECRET_KEY in
+        # /app/.env», a file that does not exist there and would be ignored if it did —
+        # configuration arrives as environment variables. The container is recognisable
+        # because the entrypoint sets QORGAN_STATE_DIR and nothing else does.
+        where = (
+            "Set SECRET_KEY as an environment variable of the service "
+            "(Railway: Service → Variables)."
+            if os.environ.get("QORGAN_STATE_DIR")
+            else f"Then set SECRET_KEY in {ENV_FILE}"
+        )
         raise ValueError(
             f"SECRET_KEY is still the built-in default and {reach}. Session cookies signed "
             "with it can be forged by anyone who has read the source, which would hand over "
             "live video and photographs of children.\n"
             f"Generate a key:  {GENERATE_KEY_COMMAND}\n"
-            f"Then set SECRET_KEY in {ENV_FILE}"
+            f"{where}"
         )
 
     @model_validator(mode="after")
