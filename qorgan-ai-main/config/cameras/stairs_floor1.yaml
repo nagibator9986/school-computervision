@@ -1,0 +1,19 @@
+profile: stairs
+
+name: stairs_floor1
+display_name: "Лестница 1 этаж"
+location: "Лестница между 1 и 2 этажом"
+priority: 3
+
+rtsp:
+  host: "192.168.1.64"
+
+bullying:
+  zones:
+    staircase:
+      - {x1: 0.18, y1: 0.05, x2: 0.58, y2: 0.68}
+    normal_flow:
+      - {x1: 0.00, y1: 0.65, x2: 1.00, y2: 1.00}   # bottom corridor band
+    normal_flow_score_multiplier: 0.30
+    normal_flow_alert_threshold: 4.00
+    staircase_proximity_multiplier: 1.60

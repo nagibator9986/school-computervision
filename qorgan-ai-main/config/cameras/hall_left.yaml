@@ -1,0 +1,24 @@
+profile: hall
+
+name: hall_left
+display_name: "Холл слева"
+location: "Главный холл / центральный вход / левый угол"
+priority: 1
+
+rtsp:
+  host: "192.168.1.4"
+
+bullying:
+  zones:
+    # A reflective column. It produced phantom people for months; tracks inside it
+    # are excluded from pair analysis entirely.
+    mirror_ignore:
+      - {x1: 0.52, y1: 0.13, x2: 0.56, y2: 0.49}
+
+    # Entrance and corridor traffic lanes. People walking past each other here are
+    # the single largest source of false positives in the whole system.
+    normal_flow:
+      - {x1: 0.00, y1: 0.00, x2: 0.38, y2: 0.52}   # entrance, left lane
+      - {x1: 0.00, y1: 0.52, x2: 0.55, y2: 0.80}   # corridor, bottom band
+    normal_flow_score_multiplier: 0.20
+    normal_flow_alert_threshold: 5.00

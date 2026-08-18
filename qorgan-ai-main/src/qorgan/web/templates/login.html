@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Вход — Qorgan AI{% endblock %}
+
+{% block content %}
+<div class="login">
+  <h1>Qorgan AI</h1>
+  {# What this is, for the person who has been handed a URL and an account and nothing else.
+     Deliberately says «наблюдение», not «безопасность»: the product watches corridors and
+     analyses recordings, and a login page that promises safety promises more than any of
+     the pages behind it deliver. #}
+  <p class="lede">Наблюдение за школой: камеры, столовая, разбор уроков</p>
+
+  {% if error %}
+  <p class="error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/login" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+      Имя пользователя
+      <input type="text" name="username" required autofocus>
+    </label>
+    <label>
+      Пароль
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit">Войти</button>
+  </form>
+</div>
+{% endblock %}

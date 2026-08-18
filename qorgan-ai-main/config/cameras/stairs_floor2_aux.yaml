@@ -1,0 +1,39 @@
+profile: stairs
+
+name: stairs_floor2_aux
+display_name: "Лестница 2 этаж (доп.)"
+location: "Вторая лестница 2 этажа"
+priority: 13
+
+rtsp:
+  host: "192.168.1.11"
+
+yolo:
+  conf: 0.24
+
+bullying:
+  metrics:
+    min_box_area: 2200
+    min_relative_speed: 110         # px/s (legacy 11 px/frame)
+    tracker_max_lost: 16
+
+    # This camera smooths less than the rest of the stairs (0.30 vs 0.55), and smoothing
+    # is what suppresses the YOLO box's wobble. Less of it means a LOUDER noise floor:
+    # measured p99 105 / peak 122 here, against 67 / 85 for the other two staircases.
+    #
+    # So it cannot inherit the profile's acceleration_threshold of 150 -- on THIS camera
+    # that number is only barely above its own noise. The two keys are coupled: move the
+    # smoothing and you must re-measure the floor. tests/test_noise_floor.py enforces it
+    # per camera, not per profile, for exactly this reason.
+    tracker_smoothing: 0.30
+    acceleration_threshold: 220     # px/s^2  (its own floor's p99 x 2)
+
+  zones:
+    staircase:
+      - {x1: 0.12, y1: 0.10, x2: 0.46, y2: 0.58}
+    normal_flow:
+      - {x1: 0.44, y1: 0.00, x2: 1.00, y2: 0.65}   # right corridor band
+      - {x1: 0.00, y1: 0.55, x2: 1.00, y2: 1.00}   # lower floor band
+    normal_flow_score_multiplier: 0.30
+    normal_flow_alert_threshold: 4.00
+    staircase_proximity_multiplier: 1.60

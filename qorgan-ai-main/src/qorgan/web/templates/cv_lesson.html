@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% import "cv_macros.html" as cv %}
+{% block title %}Урок {{ lesson.date_local or lesson.id }} · {{ lesson.camera_key }} — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Урок {{ lesson.date_local or 'без даты' }}
+  <span class="muted">· комната {{ lesson.camera_key }} · класс {{ lesson.class_key }}</span>
+  {{ cv.demo_tag(lesson.is_demo) }}</h1>
+
+
+<div class="tiles">
+  <div class="tile"><span class="value">{{ pupils | length }}</span>
+    <span class="label">ученических мест</span></div>
+  <div class="tile"><span class="value">{{ lesson.duration_minutes | round(0) | int }} мин</span>
+    <span class="label">разобрано из записи</span></div>
+  <div class="tile {{ 'ok' if coverage_median and coverage_median >= 90 else 'alert' }}">
+    <span class="value">{{ cv.coverage(coverage_median) }}</span>
+    <span class="label">видимость места, медиана</span></div>
+  <div class="tile">
+    <span class="value">{{ cv.coverage(coverage_min) }}</span>
+    <span class="label">видимость места, минимум</span></div>
+  <div class="tile"><span class="value">{{ place_minutes }}</span>
+    <span class="label">место-минут под наблюдением</span></div>
+</div>
+
+<p class="cv-lede">Единица учёта — <b>место в классе, а не ребёнок</b>. Система не ставит
+  диагнозов и не даёт рекомендаций, не сравнивает детей между собой и не измеряет
+  «вовлечённость». Всё, чего этой записью не измерено, перечислено ниже: на месте таких величин
+  стоит <span class="cv-unmeasured">не измерялось</span>, а не ноль.</p>
+
+{# Times in the zone the recording was READ in, not the stored UTC: the camera burns its own
+   clock into the picture, and «04:54» under a still reading «09:54» reads as a different
+   recording. See `cabinet.local_clock`. #}
+<p class="cv-note">
+  {% if lesson.started_at %}Запись {{ started_ru }} — {{ ended_ru }}
+    (источник времени — {{ run.clock_source }}, часовой пояс {{ lesson.timezone or 'не сохранён' }}),
+  {% else %}Время съёмки прочитать не удалось, поэтому урок не отнесён ни к одной неделе,{% endif %}
+  разобрано кадров {{ run.analysed_frames }} при {{ run.sample_fps }} кадра в секунду.
+  {% if lesson.part_count > 1 %}Урок собран из {{ lesson.part_count }} файлов: регистратор
+    разрезал один час, и это один урок, а не два.{% endif %}
+</p>
+{% if frames %}
+<p><a class="button" href="/psychologist/lessons/{{ lesson.id }}/frames">Как это выглядело на
+  записи: {{ frames }} кадров с рамками мест и подписями состояний →</a></p>
+{% endif %}
+
+{# The reading goes ABOVE the table, because it is orientation for reading the table -- and it
+   carries no quantities at all, so nothing on the page depends on it being there. #}
+{{ cv.reading_block(reading) }}
+
+<h2>Что этой записью НЕ измерено — {{ run.unmeasured | length }}
+  {{ 'пункт' if run.unmeasured | length == 1 else 'пункта' }}</h2>
+<ul class="cv-notes">
+  {% for item in run.unmeasured %}
+    <li><b>{{ item.get('what') }}</b> — {{ item.get('why') }}</li>
+  {% endfor %}
+</ul>
+
+<h2>Комната целиком в этом уроке</h2>
+<div class="cv-scroll">
+<table>
+  <thead><tr><th>по всей комнате за урок</th>
+    {% for column in columns %}<th>{{ column.label_ru }}</th>{% endfor %}</tr></thead>
+  <tbody><tr><td>суммарно по ученическим местам</td>
+    {% for c in totals %}<td>{{ cv.cell(c) }}</td>{% endfor %}</tr></tbody>
+</table>
+</div>
+<p class="cv-note">Это сумма по комнате, а не показатель ребёнка: она меняется, когда меняется
+  число детей в кадре и качество обзора.
+  {% if unassigned_percent is not none %}{{ unassigned_percent }} % наблюдений человека не попали
+  ни на одно найденное место;{% endif %}
+  мест, не установивших базовую позу — {{ run.seats_never_settled }};
+  кадров без единого человека — {{ run.frames_with_no_person }}.</p>
+
+<h2>По местам</h2>
+<div class="cv-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>место и ученик</th><th>роль</th><th>видимость</th><th>минут под наблюдением</th>
+      <th>индекс</th>
+      {% for column in columns %}<th>{{ column.label_ru }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr class="{{ 'cv-adult' if row.role == 'adult' }}">
+      <td>
+        {% if row.place_id %}
+          <a href="/psychologist/places/{{ row.place_id }}">{{ row.label_ru }}</a>
+          {#- The name sits UNDER the place, never instead of it. What was measured is the
+              chair; the name is the school's statement about who was in it, and the row has
+              to keep showing both so the reader can see which one the numbers belong to. -#}
+          {% if row.person_name %}<br><span class="muted">{{ row.person_name }}</span>{% endif %}
+        {% else %}
+          {{ row.label_ru }} <span class="tag failed">без привязки</span>
+        {% endif %}
+      </td>
+      <td class="muted">{{ 'ученик' if row.role == 'pupil' else 'взрослый' }}</td>
+      <td>{{ cv.coverage(row.coverage_percent) }}</td>
+      <td>{{ row.observed_minutes }}</td>
+      <td>{% if row.index_measured %}<b>{{ row.index_text }}</b>
+          {% else %}<span class="cv-unmeasured">{{ row.index_text }}</span>{% endif %}</td>
+      {% for c in row.cells %}<td>{{ cv.cell(c) }}</td>{% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ cv.footnote_list(footnotes) }}
+<p class="cv-note">Порядок — по расположению в комнате, а не по показателю: ранжировать детей
+  здесь нельзя. Индекс показан только там, где место было видно больше половины разобранных
+  кадров; из чего он собран — на странице места.</p>
+
+{% if not board_measurable %}
+<details class="cv-footnotes">
+  <summary>Индекс на этой камере — нижняя граница: «выход к доске» входит в него нулём</summary>
+  <p>Составляющая «видимые действия» складывает поднятые руки, вставания и выходы к доске и
+    делит сумму на 3. На этой камере зона доски не задана, поэтому «выход к доске» не измеряется
+    вовсе и входит в эту сумму НУЛЁМ — не потому, что ребёнок не выходил, а потому, что этого
+    нечем увидеть. По этому слагаемому индекс здесь занижен на неизвестную величину, и
+    сравнивать его с индексом камеры, где доска размечена, нельзя даже при прочих равных.</p>
+</details>
+{% endif %}
+
+{# The adult has no row in the per-place table above, and that is not an omission: the importer
+   accumulates the adult through this block, because the follower attributes him to the whole room
+   rather than to a seat. His zone is still a place, so it has a page. #}
+<h2>Взрослый в комнате</h2>
+{% if teacher is none %}
+  <p class="muted">Взрослого в этом разборе нет ни одной строкой.</p>
+{% else %}
+<div class="tiles">
+  <div class="tile">
+    <span class="value">
+      {%- if teacher.board_zone_configured and teacher.board_minutes_of_lesson is not none -%}
+        {{ teacher.board_minutes_of_lesson }} мин
+      {%- else -%}<span class="cv-unmeasured">не измерялось</span>{%- endif -%}
+    </span>
+    <span class="label">у доски</span>
+  </div>
+  <div class="tile">
+    <span class="value">
+      {%- if teacher.attributed_share_of_lesson_percent is not none -%}
+        {{ teacher.attributed_share_of_lesson_percent }} %
+      {%- else -%}<span class="cv-unmeasured">не измерялось</span>{%- endif -%}
+    </span>
+    <span class="label">урока отнесено к взрослому</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ cv.coverage(teacher.pose_coverage * 100 if teacher.pose_coverage else none) }}</span>
+    <span class="label">видимость его места</span>
+  </div>
+  <div class="tile">
+    <span class="value">
+      {%- if teacher.pose_transitions is not none -%}{{ teacher.pose_transitions }}
+      {%- else -%}<span class="cv-unmeasured">не измерялось</span>{%- endif -%}
+    </span>
+    <span class="label">смен позы за своим столом</span>
+  </div>
+  <div class="tile">
+    <span class="value">
+      {%- if teacher.transitions_excluding_out_of_frame is not none -%}
+        {{ teacher.transitions_excluding_out_of_frame }}
+      {%- else -%}<span class="cv-unmeasured">не измерялось</span>{%- endif -%}
+    </span>
+    <span class="label">смен положения в комнате</span>
+  </div>
+</div>
+{# Two different counts, and they are never printed as one: `pose_transitions` is «сколько раз
+   он менял позу за своим столом» and `transitions_excluding_out_of_frame` is «сколько раз он
+   переходил по комнате». Merging them was a real defect upstream. #}
+<p class="warning">Это не оценка работы учителя. {{ teacher.not_an_assessment_ru }}</p>
+{% if teacher.place_id %}
+<p class="cv-note"><a href="/psychologist/places/{{ teacher.place_id }}">Страница места
+  взрослого →</a> Динамика по нему не строится и не будет: показатели взрослого движутся вместе
+  с тем, сколько его удержало слежение, поэтому падающая линия читалась бы как «учитель стал
+  хуже», а означала бы «камера видела меньше».</p>
+{% elif teacher.place_missing_reason %}
+<p class="cv-note">Место взрослого в этом уроке не привязано: {{ teacher.place_missing_reason }}</p>
+{% endif %}
+{% if teacher.board_occupancy_available %}
+<p class="cv-note">У доски находился хоть кто-то —
+  {{ teacher.board_occupancy.get('minutes') }} мин
+  ({{ teacher.board_occupancy.get('share_of_lesson_percent') }} % урока).
+  {{ teacher.board_occupancy.get('why_it_differs_from_board_ru') }}</p>
+{% endif %}
+{% endif %}
+
+<h2>Как это читать</h2>
+<ul class="cv-notes">
+  {% for caveat in run.caveats %}<li>{{ caveat }}</li>{% endfor %}
+</ul>
+<details class="cv-footnotes">
+  <summary>Из чего собран этот урок и под какими настройками</summary>
+  <p>Прогон <code>{{ run.run_id }}</code>, схема {{ run.schema_version }}, пороги
+    <code>{{ run.thresholds_sha }}</code>, модель <code>{{ run.model_weights }}</code>,
+    загружено {{ run.imported_at.strftime('%Y-%m-%d %H:%M') }}.
+    Запись: <code>{{ run.video_path }}</code>.</p>
+  <p>Идентификатор прогона включает содержимое записи и все настройки, способные изменить
+    число, поэтому повторный разбор под другими порогами — это НОВЫЙ прогон, а не переписанный
+    старый. Показывается тот прогон, который выбран для урока
+    (<code>{{ lesson.selected_run_id }}</code>); переключение — отдельное действие человека.</p>
+</details>
+{% endblock %}

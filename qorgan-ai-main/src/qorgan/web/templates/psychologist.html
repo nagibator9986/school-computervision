@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Кабинет психолога — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Кабинет психолога</h1>
+
+{# The permanent sentence, ABOVE everything. A reader who scans a list and leaves has
+   already formed an impression, and this is the one line that must not follow the claim.
+   Same rule as /lessons, whose test asserts the warning precedes the table. #}
+<p class="meta">
+  Система <strong>никогда не направляет ребёнка к психологу сама</strong> и не считает,
+  кого стоит проверить. Здесь только факты с числами: что <strong>человек</strong> передал,
+  и что накопили камеры. Решение принимает человек — это обещано школе письменно
+  (вопросы школе, §8).
+</p>
+
+{# Every block says its own state, computed from rows. The old система гибла не от
+   отсутствия функций, а от функций, которые выглядели работающими. #}
+<section class="blocks">
+  {% for block in cabinet.blocks %}
+  <article class="block {{ block.state }}">
+    <h2>{{ block.title }} <span class="muted">({{ block.count }})</span></h2>
+    <p class="meta"><span class="tag {{ block.state }}">{{ block.label }}</span></p>
+    {% for line in block.lines %}
+    <p class="meta">{{ line }}</p>
+    {% endfor %}
+  </article>
+  {% endfor %}
+</section>
+
+<h2>Переданные инциденты <span class="muted">({{ cabinet.referrals | length }})</span></h2>
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Передал</th><th>Когда передали</th><th>Инцидент</th>
+      <th>Камера</th><th>Когда произошло</th><th>Текущий статус</th><th>Материалы</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for referral in cabinet.referrals %}
+    <tr>
+      {# The name first, because that is what makes this a person's decision rather than
+         the system's. It is never blank: "—" means the account was removed. #}
+      <td><strong>{{ referral.referred_by }}</strong></td>
+      <td>{{ referral.referred_at }}</td>
+      <td>{{ referral.summary }} <span class="tag {{ referral.severity }}">{{ referral.severity }}</span></td>
+      <td>{{ referral.camera }}</td>
+      <td>{{ referral.occurred_at }}</td>
+      {# The event's CURRENT status, which may have moved on since the handover. Shown
+         rather than hidden: "referred, and since confirmed" is a different situation from
+         "referred, and nobody has looked at it since". #}
+      <td><span class="tag {{ referral.status }}">{{ referral.status }}</span></td>
+      <td>
+        {% if 'view_bullying_media' in capabilities %}
+        {% if referral.clip %}<a href="/media/{{ referral.clip }}">клип</a>{% endif %}
+        {% if referral.snapshot %}<a href="/media/{{ referral.snapshot }}">кадр</a>{% endif %}
+        {% if not referral.clip and not referral.snapshot %}<span class="muted">нет медиа</span>{% endif %}
+        {% else %}
+        <span class="muted">нет доступа</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="empty-cell">
+      Никто ещё ничего не передавал. Это не значит, что ничего не произошло — это значит,
+      что никто не нажимал кнопку «Передать психологу» на странице «События».
+    </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Заметки психолога</h2>
+<p class="meta">
+  Конфиденциальны: их не видит ни оператор, ни администратор школы (§13). Заметки
+  открываются со страницы конкретного ученика — общего списка нет намеренно.
+  {% if 'view_pupils' in capabilities %}
+  <a href="/pupils">К списку учеников →</a>
+  {% endif %}
+</p>
+{% endblock %}

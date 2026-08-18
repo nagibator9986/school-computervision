@@ -1,0 +1,37 @@
+# Build context. Everything a container has no business carrying — and, first, everything
+# it must NEVER carry off this machine.
+
+# Children's photographs and school footage. The .gitignore names these for the same
+# reason; a build context is another way to copy a directory somewhere it should not go.
+student_photos/
+original_student_photos/
+*_student_photos/
+eval/clips/
+eval/crops/
+media/
+data/
+logs/
+
+# Secrets. Railway supplies configuration as environment variables; a baked .env would
+# both leak and silently outrank them.
+.env
+.env.*
+!.env.example
+
+# Local tooling and caches.
+.venv*/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.git/
+.DS_Store
+
+# Development-only material.
+tests/
+docs/
+deploy/*.bat
+deploy/*.ps1
+deploy/*.xml

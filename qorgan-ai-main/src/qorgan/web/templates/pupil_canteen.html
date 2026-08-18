@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ history.display }} — столовая — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>{{ history.display }} <span class="muted">{{ history.external_id }}</span></h1>
+
+<p class="meta">
+  <a href="/pupils">← к списку</a>
+  {# Drawn from the capability the trend route is gated on. The trend shows this same
+     child's meals bucketed by week; it asks for a SUPERSET of what this page asks for, so
+     it is never a second door -- see web/routes/psychologist.py. #}
+  {% if 'view_psychologist_cabinet' in capabilities %}
+  &middot; <a href="/psychologist/pupils/{{ history.person_id }}">посещаемость по неделям</a>
+  {% endif %}
+  &middot; {{ history.class_name or "—" }}
+  &middot; <span class="tag">{{ history.person_type.value }}</span>
+  {% if not history.is_active %}
+  {# The register lists active people only, so this id was reached by URL -- most likely a
+     link that predates a merge. Marked rather than left silent: an empty history under a
+     real child's name reads as "never ate", which is a claim we cannot support.
+     WHICH kind of inactive it is (merged away, or left the school) is exactly the question
+     `is_active` cannot answer -- one "no" for two facts -- so this tag does not pretend to.
+     `merged_into_id` is what tells them apart, and /pupils/duplicates is where it is read. #}
+  <span class="tag critical" title="Этот ID выведен из обращения. Объединения — на странице дубликатов.">
+    неактивен
+  </span>
+  {% endif %}
+</p>
+
+{# "Сессий", not "приёмов пищи": a session is what the cameras recorded. A child who ate
+   without being recognised has no session at all, which is the caveat the canteen report
+   carries on every surface -- see `DayReport.caveat()`. #}
+<h2>Сессии в столовой <span class="muted">({{ history.total }})</span></h2>
+<p class="meta">
+  Это записи камер, а не факт питания: ребёнок, которого не распознали на входе, здесь не
+  появится вовсе. Пустой список не означает, что человек не ел.
+</p>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr><th>Вход</th><th>Выход</th><th>Состояние</th><th>Итог</th><th>Время</th></tr>
+  </thead>
+  <tbody>
+    {% for meal in history.meals %}
+    <tr>
+      <td>{{ meal.opened_at }}</td>
+      <td>{{ meal.closed_at or "—" }}</td>
+      <td><span class="tag">{{ meal.state }}</span></td>
+      <td><span class="tag">{{ meal.outcome or "—" }}</span></td>
+      <td>{% if meal.dwell_seconds %}{{ meal.dwell_seconds | round | int }} с{% else %}—{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="empty-cell">Записей нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if history.pages > 1 %}
+<nav class="pages">
+  {% if history.page > 1 %}
+  <a href="/pupils/{{ history.person_id }}/canteen?page={{ history.page - 1 }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ history.page }} / {{ history.pages }}</span>
+  {% if history.page < history.pages %}
+  <a href="/pupils/{{ history.person_id }}/canteen?page={{ history.page + 1 }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

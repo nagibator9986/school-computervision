@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ trend.display }} — посещаемость — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>{{ trend.display }} <span class="muted">{{ trend.external_id }}</span></h1>
+
+<p class="meta">
+  <a href="/psychologist">← кабинет</a>
+  &middot; {{ trend.class_name or "—" }}
+  &middot; <a href="/pupils/{{ trend.person_id }}/canteen">сессии по одной</a>
+  {% if 'view_psychologist_notes' in capabilities %}
+  {# Drawn from the capability the route is gated on, like every link in this project. It
+     carries NO count: "the psychologist has written three times about this child" is
+     itself a disclosure, and this page is reachable by an administrator. #}
+  &middot; <a href="/psychologist/notes/{{ trend.person_id }}">заметки</a>
+  {% endif %}
+  {% if not trend.is_active %}
+  <span class="tag critical" title="Этот ID выведен из обращения — см. страницу дубликатов.">
+    неактивен
+  </span>
+  {% endif %}
+</p>
+
+{# State first, then the caveat, then the numbers. A reader who scans a table and leaves
+   has already formed an impression, so the explanation cannot follow the claim. #}
+<p class="meta">
+  {# The wording comes from `psychologist/signals.py`, the same table the cabinet index
+     reads. It used to be an `{% if %}` here with the two strings written out, which meant
+     two pages could start describing one state in two ways after an edit to either. #}
+  <span class="tag {{ trend.state }}">{{ trend.label }}</span>
+</p>
+{% for line in trend.caveat() %}
+<p class="meta">{{ line }}</p>
+{% endfor %}
+
+<h2>Посещаемость столовой по неделям</h2>
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr><th>Неделя с</th><th>Дней с записью</th><th>Записей</th><th>Из них «поел»</th></tr>
+  </thead>
+  <tbody>
+    {# Every week is drawn, including the empty ones, and oldest first. A table that
+       omitted the zero weeks would hide exactly the thing a person is looking for, and
+       the system must not be the one that points at it. #}
+    {% for week in trend.weeks %}
+    <tr>
+      <td>{{ week.starts_on }}</td>
+      <td>{{ week.days_present }}</td>
+      <td>{{ week.sessions }}</td>
+      <td>{{ week.meals_recorded }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<p class="meta">
+  Здесь нет ни стрелок, ни оценок, ни порогов: система не сравнивает ребёнка с нормой и не
+  отмечает «падение». Это счётчики. Что они значат — решает человек.
+</p>
+{% endblock %}

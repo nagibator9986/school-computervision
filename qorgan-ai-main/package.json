@@ -1,0 +1,13 @@
+{
+  "name": "qorgan-ai-web",
+  "private": true,
+  "description": "Build tooling for the dashboard stylesheet. Runtime needs none of this: `src/qorgan/web/static/app.css` is COMMITTED, and both the FastAPI app and classvision's static export read that file directly.",
+  "scripts": {
+    "css": "tailwindcss -i src/qorgan/web/tailwind.css -o src/qorgan/web/static/app.css",
+    "css:watch": "tailwindcss -i src/qorgan/web/tailwind.css -o src/qorgan/web/static/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0"
+  }
+}

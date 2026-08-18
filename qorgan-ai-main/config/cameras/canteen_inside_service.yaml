@@ -1,0 +1,9 @@
+profile: canteen_inside
+
+name: canteen_inside_service
+display_name: "Столовая угол / выдача"
+location: "Столовая / угол / линия выдачи"
+priority: 21
+
+rtsp:
+  host: "192.168.1.9"

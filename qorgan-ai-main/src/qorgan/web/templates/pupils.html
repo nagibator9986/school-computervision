@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Ученики — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Ученики и сотрудники <span class="muted">({{ registry.total }})</span></h1>
+
+{# Server-rendered, like every table in v2. The legacy built this one with innerHTML from
+   server JSON, so a pupil named `<img src=x onerror=...>` was stored XSS in the operator's
+   browser (audit H-05). Nothing on this page is built from a string in JavaScript. #}
+
+{# No capability test on this paragraph: the route itself requires VIEW_PUPILS, so a
+   condition here could never be false, and a check that cannot fail reads as if the page
+   were reachable without the grant. The tests below DO guard links whose target needs a
+   capability this page does not -- the canteen history, and the duplicates page. #}
+<p class="meta">
+  {# The id is the identity; the name is a display field. There is no ID -> name roster
+     yet, so `Ученик 333, 5-А` is the honest thing to show -- see `identity/naming.py`. #}
+  Идентификатор — это то, чем система оперирует. Имя показывается, только если школа
+  прислала таблицу имён.
+  <a href="/pupils/duplicates">Дубликаты и объединение →</a>
+</p>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>ID школы</th>
+      <th>Имя</th>
+      <th>Класс</th>
+      <th>Тип</th>
+      <th>Распознавание</th>
+      <th>Столовая</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in registry.rows %}
+    <tr>
+      <td>{{ row.external_id }}</td>
+      <td>{{ row.display }}</td>
+      <td>{{ row.class_name or "—" }}</td>
+      <td><span class="tag">{{ row.person_type.value }}</span></td>
+      {# Both states are written out. A blank for "cannot be recognised" would read
+         exactly like a column nobody filled in, and four of this school's staff genuinely
+         have no usable face at all (spec §1.1) -- that is a finding, not an absence. #}
+      <td>
+        {% if row.recognisable %}
+        <span class="tag ok">распознаётся</span>
+        {% else %}
+        <span class="tag critical" title="Нет пригодного эмбеддинга: система не сможет узнать этого человека">
+          не распознаётся
+        </span>
+        {% endif %}
+      </td>
+      <td>
+        {% if 'view_canteen' in capabilities %}
+        {# Drawn from the same table the route is gated on, so a link a role cannot follow
+           is never drawn -- two sources of truth would mean clicking into a 403. #}
+        <a href="/pupils/{{ row.person_id }}/canteen">История питания</a>
+        {% else %}
+        <span class="muted">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Никто не импортирован.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if registry.pages > 1 %}
+{# The legacy loaded the whole table on every render, every 2.5s, per client (audit M-19).
+   142 people today; 800 at the school this is sold into. #}
+<nav class="pages">
+  {% if registry.page > 1 %}
+  <a href="/pupils?page={{ registry.page - 1 }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ registry.page }} / {{ registry.pages }}</span>
+  {% if registry.page < registry.pages %}
+  <a href="/pupils?page={{ registry.page + 1 }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

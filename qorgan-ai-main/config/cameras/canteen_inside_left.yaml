@@ -1,0 +1,9 @@
+profile: canteen_inside
+
+name: canteen_inside_left
+display_name: "Столовая слева"
+location: "Столовая / левая сторона / столы"
+priority: 20
+
+rtsp:
+  host: "192.168.1.5"

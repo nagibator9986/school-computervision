@@ -1,0 +1,60 @@
+# Canteen exit corridor. The ONLY camera that may close a meal session.
+#
+# It sees the backs of heads and faces at an angle, so its gates are the loosest in
+# the system -- which is exactly why the session rules refuse to let it close a
+# session younger than 30 s. Otherwise it closes the session of the pupil who just
+# walked IN past it (see session.exit_min_session_age_seconds).
+#
+# Legacy called this cam_bullying_5.yaml.
+
+# ---------------------------------------------------------------------------
+# ANALYSIS RESOLUTION. Every frame reaching the detector on this camera type is resized
+# to capture.frame_width x frame_height (base.yaml, or the override below) by the one
+# shared qorgan.capture.frames.prepare_frame(). Every px/s and px/s^2 threshold in this
+# file -- and the noise floor they were checked against -- is expressed in pixels of THAT
+# frame. Change the resolution and every one of them is void.
+# ---------------------------------------------------------------------------
+
+camera_type: canteen
+role: canteen_exit
+
+capture:
+  frame_width: 1280
+  frame_height: 720
+  # No stream_fps override -- see base.yaml. The sub-stream rate belongs to the NVR.
+
+yolo:
+  conf: 0.24
+
+canteen:
+  exit:
+    # How often to RE-ATTEMPT a close that the session machine refused. `close()` will not
+    # close a session younger than 30 s -- this camera looks at the backs of heads, and the
+    # back it most often sees is a child who has just walked IN -- and that refusal is "not
+    # yet", not "no". A child recognised here while their session is young must be tried
+    # again while they are still in front of us, or their session never closes at all and
+    # force-closes as UNKNOWN 90 minutes later.
+    #
+    # This is NOT the tracking cadence. ByteTrack needs every frame; gating the tracker on
+    # an interval is what split one child into two meal records.
+    #
+    # `face_roi`, `min_person_box_area` and `person_cooldown_seconds` used to sit here. The
+    # last two were copied from the entry camera and could never have meant anything: they
+    # bound the creation of Unknown meal sessions, and this camera does not open sessions.
+    watch_interval_seconds: 0.25
+
+    recognition:
+      min_score: 0.50
+      min_gap: 0.18
+      # `face_gate` used to sit here. Nothing read it -- see canteen_entry.yaml.
+
+    soft:
+      enabled: true
+      min_score: 0.50
+      min_gap: 0.12
+      min_hits: 2
+      window_seconds: 8.0
+      face_gate:
+        min_width: 27
+        min_height: 42
+        min_area: 1134

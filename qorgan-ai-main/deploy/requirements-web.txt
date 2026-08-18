@@ -1,0 +1,37 @@
+# THE DASHBOARD'S RUNTIME, and only it.
+#
+# Taken from `pyproject.toml [project] dependencies` with ONE line removed:
+# `opencv-python`. It is a hard dependency of the WORKERS — capture, clip recording,
+# preview publishing, pose — and it was a hard dependency of the web process too, purely
+# because `qorgan.web` reached `media_root` through `qorgan.notify` → `events.recorder`,
+# which imported cv2 at module level. Both that import and the preview publisher's are
+# lazy now (see the notes on those two files), so the dashboard genuinely never loads it.
+#
+# That removal is worth ~120 MB of wheel plus the system GL libraries OpenCV links
+# against (`libGL.so.1`, `libglib-2.0.so.0`) — packages a slim image does not carry and a
+# container failure mode nobody would enjoy debugging at a demo.
+#
+# `psutil` and `alembic` stay: they are not needed to IMPORT the web app, which is what a
+# blocked-import test measures, but they are needed to RUN it — alembic for the migration
+# on boot, psutil for the worker diagnostics the dashboard renders.
+#
+# Versions are the pins from pyproject and must stay in step with it.
+fastapi==0.136.3
+uvicorn==0.48.0
+starlette==1.2.0
+jinja2==3.1.6
+python-multipart==0.0.29
+itsdangerous==2.2.0
+bcrypt==5.0.0
+httpx==0.28.1
+pydantic==2.13.4
+pydantic-settings==2.7.1
+python-dotenv==1.2.2
+PyYAML==6.0.3
+SQLAlchemy==2.0.44
+alembic==1.14.1
+pyzmq==26.2.1
+psutil==7.2.2
+numpy==2.4.4
+pillow==12.2.0
+tzdata==2025.2

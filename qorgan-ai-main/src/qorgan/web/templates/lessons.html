@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Уроки — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Наблюдения на уроках</h1>
+
+{# The disclaimer sits ABOVE the list, not under it. It is the one place the explanation
+   cannot follow the claim: a reader who scans the table and leaves has already formed an
+   impression, and the impression this page most easily creates -- "the system knows what
+   each child did" -- is the one that is false. Same reasoning as the «нет записи о
+   питании» tile label on /canteen. #}
+<p class="warning">
+  Система не узнаёт учеников в классе и не пытается — на таком расстоянии это
+  измеренно не работает. Все числа ниже относятся к анонимным ТРЕКАМ, а не к ученикам,
+  и ни один порог не проверен на записи настоящего урока.
+</p>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Начало</th>
+      <th>Камера</th>
+      <th>Состояние</th>
+      <th>Треков</th>
+      <th>Из них фрагментов</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for report in lessons %}
+    <tr>
+      <td><a href="/lessons/{{ report.lesson_id }}">{{ report.started_at.strftime('%Y-%m-%d %H:%M') }}</a></td>
+      <td>{{ report.camera_name }}</td>
+      <td>
+        <span class="tag">{{ report.state.value }}</span>
+        {% if report.close_reason %}<span class="meta">{{ report.close_reason.value }}</span>{% endif %}
+      </td>
+      {# `present` and `fragments` are shown as two numbers and never summed into one
+         "pupils" column. A fragment is a track the system lost almost immediately, and
+         presenting the total as a headcount is exactly the false impression above. #}
+      <td>{{ report.present | length }}</td>
+      <td>{{ report.fragments | length }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="empty-cell">Наблюдений пока нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+profile: hall
+
+name: hall_right
+display_name: "Холл справа"
+location: "Главный холл / правая сторона"
+priority: 2
+
+rtsp:
+  host: "192.168.1.2"
+
+bullying:
+  zones:
+    mirror_ignore:
+      - {x1: 0.34, y1: 0.04, x2: 0.38, y2: 0.29}
+    normal_flow:
+      - {x1: 0.60, y1: 0.00, x2: 1.00, y2: 0.52}   # right entrance lane
+    normal_flow_score_multiplier: 0.20
+    normal_flow_alert_threshold: 5.00

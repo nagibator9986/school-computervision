@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Столовая — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Столовая</h1>
+
+<form method="get" action="/canteen" class="filters">
+  <label>
+    Дата
+    <input type="date" name="day" value="{{ day }}" onchange="this.form.submit()">
+  </label>
+  <a class="button" href="/canteen/export.csv?day={{ day }}">Скачать CSV</a>
+</form>
+
+<section class="tiles">
+  <div class="tile ok">
+    <span class="value">{{ report.ate | length }}</span>
+    <span class="label">поели</span>
+  </div>
+  <div class="tile alert">
+    <span class="value">{{ did_not_eat | length }}</span>
+    <span class="label">пришли, но не поели</span>
+  </div>
+  {# "Нет записи о питании", not "не приходили". This is the number an operator glances at,
+     and it sits far above the caveat under the table -- the one place the explanation
+     cannot follow the claim -- so the label itself has to be honest. It counts pupils we
+     have no record for, which is not the same as pupils who did not eat: a child who ate
+     unrecognised is in here. See `DayReport.did_not_eat`. #}
+  <div class="tile critical">
+    <span class="value">{{ never_came | length }}</span>
+    <span class="label">нет записи о питании</span>
+  </div>
+  {# Both counts render ALWAYS, including zero -- deliberately. A tile hidden at zero
+     renders identically to a tile whose value was never computed, to a broken query, and
+     to a value dropped between the report and this template. That last one is not
+     hypothetical: `forced_unknown` was computed by `day_report`, handed to this page
+     inside `report`, and silently discarded HERE -- and it went unnoticed for exactly
+     this reason, because a dropped value and a zero both showed as nothing. These two
+     numbers exist to tell a measured zero apart from an unmeasured one, and a blank
+     cannot do that. Both are genuine COUNT(*): `0` is a finding, not an absence. #}
+  <div class="tile">
+    <span class="value">{{ report.unknown_sessions }}</span>
+    <span class="label">вход не распознан</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ report.forced_unknown }}</span>
+    <span class="label">выход не распознан</span>
+  </div>
+</section>
+
+{% if report.unknown_sessions %}
+{# The legacy had 1816 of 1820 records unattributed. If this number is large, face
+   recognition is not working, and the report must SAY so rather than quietly reporting
+   that nobody ate. #}
+<p class="warning">
+  {{ report.unknown_sessions }} сессий не удалось привязать к ученику (вход). Если это
+  число велико — распознавание лиц не работает.
+</p>
+{% endif %}
+
+{% if report.forced_unknown %}
+{# The measured price of a strict exit `min_score` (spec A §2.2): a pupil entered and was
+   never recognised on the way out, so the janitor force-closed the session by TIMEOUT.
+   The CLI prints it; an operator lives HERE, and a cost nobody looks at is not measured.
+   A raw COUNT(*), never a rate: we do not know how many exits SHOULD have been
+   recognised, so there is no honest denominator. The two numbers on this page are NOT
+   exclusive (a session with no pupil at entry can also time out) and are never summed —
+   hence two separate counts, each labelled by the camera it failed at, and no total. #}
+<p class="warning">
+  {{ report.forced_unknown }} сессий закрыто по таймауту: ученик вошёл, но на выходе его
+  не распознали. Это отдельный счёт от «вход не распознан» (другая камера); числа
+  пересекаются и не суммируются. Если это число растёт — порог распознавания на выходе
+  слишком строгий.
+</p>
+{% endif %}
+
+<h2>Нет записи о питании ({{ never_came | length }})</h2>
+{# This list is "pupils with no meal record today". It is honest as a list -- these pupils
+   genuinely have no record -- but it is NOT "pupils who did not eat", and a headteacher
+   reading it as the second is the failure this page exists to prevent. A child who ATE
+   but was not recognised lands here under their real name; see `DayReport.did_not_eat`
+   for why the number nonetheless stays exactly as it is.
+
+   The wording comes from `DayReport.caveat()` rather than being written here, so that the
+   page, the CSV the school actually reads, and the CLI cannot drift into saying three
+   different things. Rendered unconditionally: sentence 1 is true on every day, and its
+   absence on a quiet day is precisely how the claim gets lost. #}
+<p class="meta">
+  {% for line in report.caveat() %}{{ line }} {% endfor %}
+</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Класс</th><th>Ученик</th></tr></thead>
+  <tbody>
+    {% for person in never_came %}
+    <tr><td>{{ person.class_name or "—" }}</td><td>{{ person.display }}</td></tr>
+    {% else %}
+    <tr><td colspan="2" class="empty-cell">У каждого ученика есть запись о питании за этот день.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Пришли, но не поели ({{ did_not_eat | length }})</h2>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Класс</th><th>Ученик</th><th>Время</th><th>Итог</th></tr></thead>
+  <tbody>
+    {% for meal in did_not_eat %}
+    <tr>
+      <td>{{ meal.class_name or "—" }}</td>
+      <td>{{ meal.display }}</td>
+      <td>{% if meal.dwell_seconds %}{{ meal.dwell_seconds | round | int }} с{% else %}—{% endif %}</td>
+      <td><span class="tag">{{ meal.outcome.value if meal.outcome else "—" }}</span></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="empty-cell">Никого.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Поели ({{ ate | length }})</h2>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Класс</th><th>Ученик</th><th>Время</th></tr></thead>
+  <tbody>
+    {% for meal in ate %}
+    <tr>
+      <td>{{ meal.class_name or "—" }}</td>
+      <td>{{ meal.display }}</td>
+      <td>{% if meal.dwell_seconds %}{{ meal.dwell_seconds | round | int }} с{% else %}—{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="empty-cell">Никого.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

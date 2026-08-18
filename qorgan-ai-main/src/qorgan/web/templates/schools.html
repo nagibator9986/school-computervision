@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Школы — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Школы <span class="muted">({{ schools | length }})</span></h1>
+
+{# Counts, and nothing else. There is no column here for a pupil's name, a photograph, an
+   incident or a meal, and there is no route behind this page that could return one: the
+   SUPERADMIN role holds no child-facing capability at all (`qorgan/roles.py`). Somebody
+   who administers twenty schools' machines is not somebody twenty schools have entrusted
+   with their children, and that distinction has to be visible in what the page shows.
+
+   Server-rendered, nothing marked |safe, no JavaScript building DOM from strings -- a
+   school's name is text somebody typed, of exactly the shape that gave the legacy stored
+   XSS in an operator's browser (audit H-05). #}
+
+{% if error %}
+<p class="warning">{{ error }}</p>
+{% endif %}
+
+{# THE LIMITS OF THIS BUTTON, WHERE THE PERSON PRESSING IT WILL READ THEM.
+
+   Three parts of the system are not yet per-school, and all three become wrong the moment
+   a second school exists. They are written on THIS page, beside the form that creates one,
+   because a constraint recorded only in a test file is a constraint nobody deploying will
+   ever meet. `tests/test_schools_page.py` asserts this block is still here.
+
+   THE FIRST BULLET'S REASON CLAUSE IS PINNED TOO, and it had to be: it used to say the
+   `--school` flag did not exist yet, and went on saying so for a commit after the flag
+   shipped -- on this page, to the one role that reads it, contradicting
+   `qorgan user add --help` on the same installation. Nothing noticed, because the only
+   assertion on this block looked for the word `ensure_cameras`.
+   `test_the_warning_names_the_school_flag_the_cli_actually_has` now checks the sentence
+   against the built parser, and `tests/test_the_prose_and_the_parser_agree.py` checks the
+   whole tree for the same shape of claim in both directions. #}
+<section class="warning" id="second-school-warning">
+  <h2>Прежде чем добавлять вторую школу</h2>
+  <ul>
+    <li>
+      <strong>Детекция остановится на всей установке.</strong> Рабочие процессы
+      регистрируют камеры через <code>ensure_cameras</code>, который при двух школах
+      отказывается выбирать школу и падает. Назвать школу умеют
+      <code>qorgan user add --school</code> и команды <code>qorgan classvision</code>
+      (<code>import</code>, <code>demo</code>, <code>frames</code>, <code>attest</code>) —
+      то есть учётная запись и разбор записей уроков, но <b>не камера</b>: рабочему
+      процессу школу назвать нечем. Поэтому ни одной камере ни одной школы нельзя будет
+      назначить рабочий процесс, пока это не сделано.
+    </li>
+    <li>
+      <strong>Камеры, превью и настройки перестанут открываться.</strong> Список камер,
+      живой кадр <code>/preview</code> и страница настроек читаются из конфигурационных
+      файлов, у которых нет измерения школы, — то есть показать только вашу школу они не
+      могут. Поэтому при двух школах они отказывают и объясняют причину, а не показывают
+      камеры и живое видео обеих школ.
+    </li>
+    <li>
+      <strong>Уведомления уйдут в один чат.</strong> Telegram настраивается один раз на
+      установку, поэтому тревоги обеих школ придут одним и тем же людям.
+    </li>
+  </ul>
+  <p class="meta">
+    Как только школ станет больше одной, страницы камер, превью и настроек перестанут
+    открываться и объяснят почему — вместо того чтобы показать камеры обеих школ. События,
+    уведомления, столовая, ученики и уроки продолжат работать и будут показывать только
+    вашу школу.
+  </p>
+  {# Deliberately does NOT say "and you can remove it again": this page creates and renames,
+     and there is no delete anywhere in `qorgan.schools`. Telling an operator they can undo
+     something they cannot would be worse than telling them nothing. #}
+</section>
+
+<section class="new-account">
+  <h2>Новая школа</h2>
+  <form method="post" action="/schools" class="filters" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+      Короткое имя
+      <input type="text" name="slug" value="{{ form_slug }}" maxlength="64" required>
+    </label>
+    <label>
+      Название
+      <input type="text" name="name" value="{{ form_name }}" maxlength="255" required>
+    </label>
+    <button type="submit" class="confirm">Создать</button>
+  </form>
+  <p class="meta">
+    Короткое имя носят команды и журналы, поэтому его нельзя изменить позже. Название —
+    можно.
+  </p>
+</section>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Короткое имя</th>
+      <th>Название</th>
+      <th>Учеников</th>
+      <th>Камер</th>
+      <th>Учётных записей</th>
+      <th>Статус</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for school in schools %}
+    <tr class="school">
+      <td>{{ school.slug }}</td>
+      <td>
+        <form method="post" action="/schools/{{ school.id }}/name" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="text" name="name" value="{{ school.name }}" maxlength="255" required
+                 aria-label="Название школы {{ school.slug }}">
+          <button type="submit" class="link">Переименовать</button>
+        </form>
+      </td>
+      <td>{{ school.pupils }}</td>
+      <td>{{ school.cameras }}</td>
+      <td>{{ school.accounts }}</td>
+      <td>
+        {% if school.is_active %}
+        <span class="tag ok">работает</span>
+        {% else %}
+        <span class="tag">отключена</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Школ нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

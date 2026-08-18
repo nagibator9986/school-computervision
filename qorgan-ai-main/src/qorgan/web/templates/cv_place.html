@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% import "cv_macros.html" as cv %}
+{% block title %}{{ place.label_ru }} · {{ place.camera_key }} — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>{{ display_name }}
+  <span class="muted">{% if signature %}· {{ place.label_ru }} {% endif %}· комната
+    {{ place.camera_key }} · класс {{ place.class_key }}</span>
+  {{ cv.demo_tag(is_demo) }}</h1>
+
+{% if is_pupil and signature %}
+{# The name is here because a person signed for it. That sentence has to sit next to the name
+   itself: a heading with a child's name and the justification three screens down is a heading
+   that will be read as face recognition, which is the one thing this system does not do. #}
+<p class="cv-lede">Имя на этой странице стоит по <b>подписанному плану рассадки</b>, а не по
+  распознаванию лица. Единица учёта — место; кто на нём сидит, письменно подтвердил человек.
+  <br><span class="muted">Подписал: {{ signature.attested_by }}. Основание:
+    {{ signature.decision_ref }}. Действует с {{ signature.valid_from_ru }}.</span></p>
+{% elif is_pupil %}
+<p class="cv-lede">Плана рассадки на это место нет, поэтому страница называет его
+  <b>местом, а не ребёнком</b>. Так и должно быть: ни лицо, ни трекер имени здесь не создают.
+  {% if identity_reason %}<br><span class="muted">{{ identity_reason }}</span>{% endif %}</p>
+{% else %}
+<p class="cv-lede">Это <b>зона взрослого</b>: место, от которого он начинает урок. Смысл слежения
+  за взрослым именно в том, что он от этой зоны уходит, поэтому здесь не копятся счётчики
+  ученика и не строится никакая динамика — ни сейчас, ни после подписанного плана рассадки.
+  Ученические счётчики к взрослому не применяются: поднятая рука взрослого — это указание на
+  доску, а не участие в уроке.</p>
+{% endif %}
+
+
+{# THE REFUSAL FIRST. A page that shows a falling series and then explains at the bottom that it
+   is not a trend has already been read as a trend. #}
+<section class="cv-trend cv-trend-{{ trend.state }}">
+  <h2>Динамика по неделям</h2>
+  <p class="cv-headline">{{ trend.headline_ru }}</p>
+  <p>{{ trend.detail_ru }}</p>
+
+  {% if trend.gates %}
+  <h3>Что должно совпасть, чтобы динамика строилась — выполнено
+    {{ trend.passed_gates }} из {{ trend.gates | length }}</h3>
+  <ul class="gates">
+    {% for gate in trend.gates %}
+    <li class="{{ 'ok' if gate.passed else 'no' }}">
+      <code>{{ gate.key }}</code>: {{ gate.measured_ru }}
+      <span class="muted">(требуется: {{ gate.required_ru }})</span>
+      <span class="why">{{ gate.detail_ru }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if trend.checklist %}
+  <h3>Что запросить, чтобы динамика стала возможной — {{ trend.checklist | length }}
+    {{ 'пункт' if trend.checklist | length == 1 else 'пункта' }}</h3>
+  <p class="muted">Список полный: если придёт всё перечисленное, динамика по этому месту будет
+    построена; если не хватит одного пункта — не будет.</p>
+  <ol class="cv-checklist">
+    {% for item in trend.checklist %}
+    <li>
+      <b>{{ item.what }}</b>
+      <span class="why">Зачем именно это: {{ item.why }}</span>
+      <span class="how">Как: <code>{{ item.how }}</code></span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+
+{{ cv.reading_block(reading, only_place=reading_only_place, subtitle=latest_date_ru) }}
+
+<h2>Уроки этого места</h2>
+{% if not rows %}
+  <p class="cv-note">{{ no_rows_reason_ru }}</p>
+{% else %}
+<div class="cv-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>дата</th><th>неделя</th><th>видимость</th><th>минут</th><th>индекс</th>
+      {% for column in columns %}<th>{{ column.label_ru }}</th>{% endfor %}
+      <th>опознано</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="/psychologist/lessons/{{ row.lesson_id }}">{{ row.date_ru }}</a>
+        {{ cv.demo_tag(row.is_demo) }}</td>
+      <td class="muted">{{ row.iso_week }}</td>
+      <td>{{ cv.coverage(row.coverage_percent) }}</td>
+      <td>{{ row.observed_minutes }}</td>
+      <td>{% if row.index_measured %}<b>{{ row.index_text }}</b>
+          {% else %}<span class="cv-unmeasured">не измерялось</span>{% endif %}</td>
+      {% for c in row.cells %}<td>{{ cv.cell(c) }}</td>{% endfor %}
+      <td>
+        {% if row.place_match == 'matched' %}<span class="tag running">однозначно</span>
+        {% else %}<span class="tag failed">{{ row.place_match }}</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ cv.footnote_list(footnotes) }}
+<p class="cv-note">Столбец «опознано» — про геометрию, а не про ребёнка: он говорит, удалось ли
+  сопоставить место этого урока с этим же местом прежних уроков. Урок, где не удалось, к истории
+  не присоединяется.</p>
+{% endif %}
+
+{% if rows | selectattr('segments') | list %}
+<h2>Как менялся показатель ВНУТРИ урока</h2>
+<p class="cv-note">Сравнение — этого места с самим собой в пределах одного урока, и больше ни с
+  чем. Отрезки одного урока сравнимы только друг с другом.</p>
+{% for row in rows %}
+  {% if row.segments %}
+  <div class="cv-lesson-strip">
+    <div class="cv-strip-head">
+      <b>{{ row.date_ru }}</b> {{ cv.demo_tag(row.is_demo) }}
+      <span class="muted">· {{ row.segments | length }} отрезков ·
+        {{ row.change_ru }}</span>
+    </div>
+    <div class="cv-strip">
+      {% for segment in row.segments %}
+      <div class="cv-seg {{ 'cv-seg-off' if not segment.measured }}">
+        <span class="cv-seg-value">{{ segment.index_text }}</span>
+        <span class="cv-seg-bar" style="--h: {{ segment.index_text if segment.measured else 0 }}%"></span>
+        <span class="cv-seg-label">отрезок {{ segment.ordinal }}<br>
+          обзор {{ segment.coverage_percent | int }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if row.change_reason_ru %}<p class="cv-note">{{ row.change_reason_ru }}</p>{% endif %}
+    {% if row.visibility_bound is not none %}
+    <p class="cv-note">Сколько из этого изменения могло дать одно ухудшение обзора:
+      {{ row.visibility_bound }} балла индекса.
+      {% if row.visibility_bound == 0.0 %}Обзор между началом и концом урока не падал, значит
+        изменение не объясняется видимостью.{% endif %}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endfor %}
+{% endif %}
+{% if not_comparable_ru %}
+<details class="cv-footnotes">
+  <summary>Почему это не динамика по неделям и с чем эти отрезки несравнимы</summary>
+  <p>{{ not_comparable_ru }}</p>
+</details>
+{% endif %}
+
+{% if latest %}
+<h2>Из чего собран индекс — урок {{ latest_date_ru }}</h2>
+<p class="cv-note">Показатель — это сумма наблюдаемых признаков с весами, а не «вовлечённость»:
+  каждое слагаемое показано отдельно именно поэтому. Сумма слагаемых и есть индекс
+  {{ latest.index_text }}.</p>
+<div class="cv-scroll">
+<table>
+  <thead><tr><th>слагаемое</th><th>значение</th><th>вес</th><th>вклад в индекс</th>
+    <th>из чего посчитано</th></tr></thead>
+  <tbody>
+  {% for part in latest.parts %}
+    <tr>
+      <td>{{ part.get('label_ru') }}</td>
+      <td>{{ (part.get('value') * 100) | round(1) }} %</td>
+      <td class="muted">{{ part.get('weight') }}</td>
+      <td><span class="cv-bar" style="--w: {{ part.get('contribution') }}%">
+        {{ part.get('contribution') }}</span></td>
+      <td class="muted">{{ part.get('raw_ru') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

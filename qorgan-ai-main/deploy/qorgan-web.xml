@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Qorgan AI - the dashboard. Registered by deploy/install-autostart.bat, which rewrites
+  __QORGAN_ROOT__ and __QORGAN_USER__ before handing this to schtasks.
+
+  This task and qorgan-supervisor are independent: neither needs the other to start, and
+  the fleet keeps watching whether or not the dashboard is up. See qorgan-supervisor.xml
+  for why each setting below is stated rather than left to Task Scheduler's default.
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Qorgan AI - the web dashboard (live previews, event log, canteen journal) and the Telegram notification queue. Runs until the machine is switched off.</Description>
+    <URI>\Qorgan AI\qorgan-web</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+      <Delay>PT30S</Delay>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <!-- A real user, not LOCAL SYSTEM - see qorgan-supervisor.xml. The dashboard
+           process is also the one that drains the Telegram queue, so it reads .env for
+           the bot token, and .env is read from the install root. -->
+      <UserId>__QORGAN_USER__</UserId>
+      <LogonType>Password</LogonType>
+      <!-- LeastPrivilege: this process reads camera streams, a GPU and files under
+           the install root. It needs administrator for none of them, and it handles
+           live video and photographs of children - the last thing that should run
+           with more rights than it uses. (Registering the task DOES need an admin
+           prompt, because a BootTrigger does; that is install-autostart.bat's
+           problem, once, and not this process's privilege forever.) -->
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <!-- Two dashboards would both try to bind WEB_PORT; the second dies on startup and
+         the school gets a task that is permanently red for no reason. -->
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>false</WakeToRun>
+    <!-- PT0S = no limit. The default, PT72H, would stop the dashboard every three days
+         - and with it the Telegram queue, which is what actually delivers the alerts. -->
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>5</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>__QORGAN_ROOT__\deploy\qorgan-web.bat</Command>
+      <WorkingDirectory>__QORGAN_ROOT__</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

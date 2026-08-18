@@ -1,0 +1,48 @@
+# Yard / outdoor entrance.
+#
+# Longer camera distance means smaller boxes and noisier motion, so every kinematic
+# threshold is loosened a little and the score bar is raised slightly to compensate.
+
+# ---------------------------------------------------------------------------
+# ANALYSIS RESOLUTION. Every frame reaching the detector on this camera type is resized
+# to capture.frame_width x frame_height (base.yaml, or the override below) by the one
+# shared qorgan.capture.frames.prepare_frame(). Every px/s and px/s^2 threshold in this
+# file -- and the noise floor they were checked against -- is expressed in pixels of THAT
+# frame. Change the resolution and every one of them is void.
+# ---------------------------------------------------------------------------
+
+camera_type: bullying
+role: outdoor
+
+yolo:
+  conf: 0.24
+
+# Speeds are px/s, accelerations px/s^2 — converted from the legacy's px/frame at its
+# ~10 fps analysis rate, and provisional until the eval harness re-derives them.
+# See config/profiles/hall.yaml for the full explanation.
+
+bullying:
+  alert_score_threshold: 1.45
+
+  metrics:
+    proximity_threshold: 170        # px
+    close_distance_ratio: 0.95
+    contact_distance_ratio: 0.62
+    speed_threshold: 240            # px/s    (legacy 24)
+    min_relative_speed: 110         # px/s    (legacy 11)
+
+    # The legacy's 9 converts to 90 -- and 90 is still inside this camera's noise floor.
+    # The yard smooths the least of the fleet (0.30, to keep outdoor motion responsive),
+    # and light smoothing means a LOUD floor: measured p99 105, peak 122. Less smoothing
+    # buys reaction time and pays for it in noise; the threshold has to know that.
+    acceleration_threshold: 220     # px/s^2  (floor p99 x 2)
+
+    window_drop_threshold: 6        # px
+    direction_change_threshold_deg: 40
+    min_box_area: 2200
+    tracker_max_lost: 16
+    tracker_smoothing: 0.30
+
+  skeleton:
+    min_frames: 8
+    max_frames: 16

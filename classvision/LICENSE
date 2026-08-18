@@ -1,0 +1,15 @@
+Copyright (c) 2026. All rights reserved.
+
+This software is proprietary. No permission is granted to copy, distribute or
+create derivative works without the copyright holder's written permission.
+
+IMPORTANT — this notice does not cover the third-party components the software
+depends on, and two of them constrain how it may be delivered:
+
+  * Ultralytics (YOLO pose models) is AGPL-3.0. Serving it over a network can
+    trigger source-disclosure obligations.
+  * The InsightFace `buffalo_l` weights are licensed for non-commercial research
+    use only.
+
+See THIRD_PARTY_LICENSES.md before shipping this to anyone. Both constraints are
+avoidable; neither is avoided by ignoring it.

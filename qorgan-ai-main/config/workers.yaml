@@ -1,0 +1,65 @@
+# Which cameras run in which worker process.
+#
+# The spec asks for one OS process per camera. Measured on this machine
+# (RTX 3050 Laptop, 4096 MB) with `qorgan plan-workers --dry-run`, which loads
+# exactly what each kind of worker loads in production and reports the peak.
+# (This header used to credit `scripts/vram_spike.py --fleet`. There is no
+# scripts/ directory in this repo and there never was — the same phantom
+# .gitignore cites as `scripts/fetch_models.py`, which HANDOVER.md §0 already
+# flags. Re-run the real command; do not go looking for the script.)
+#
+# EVERY NUMBER BELOW IS GPU MEMORY (VRAM), not disk:
+#
+#     bullying process (YOLOv8n + YOLOv8n-pose)   ~155 MB   whole process
+#     canteen  process (YOLOv8n + InsightFace)    ~850 MB   whole process
+#     all 10, one per camera                      3930 / 4096 MB, tenth already starved
+#
+# So 1:1 does not fit — but not because CUDA contexts are expensive. They are not
+# (~155 MB, models included). The cost is **InsightFace buffalo_l at ~708 MB of
+# VRAM per instance** — the ~850 MB above is that instance plus the canteen
+# process's own YOLO and CUDA context (708 + 62 + 81), so 850 and 708 are the
+# process and the model, not two estimates of one thing. Do not confuse either
+# with the ~341 MB the buffalo_l pack occupies ON DISK in ~/.insightface/
+# (HANDOVER.md §0) — that is a file to copy, not memory to fit.
+#
+# This is the audit's H-12 finding ("up to 5 InsightFace instances in one
+# process") turned into a hard wall: one instance per PROCESS is just as fatal.
+#
+# Grouping the canteen cameras is therefore the whole game. With the layout below:
+#
+#     2 bullying groups  ~310 MB  +  2 canteen groups  ~1700 MB  ≈  2.0 GB
+#
+# leaving ~2 GB of headroom for activations under real load.
+#
+# On a bigger GPU, write one camera per group; nothing in the code changes.
+#
+# What this file does NOT change:
+#   - Coverage comes from here, never from which browser tab the operator has open (R3).
+#     Legacy analysed the stairs only while somebody was looking at the stairs page.
+#   - The supervisor restarts a group that dies, and kills one that wedges (R7).
+#
+# Every enabled camera must appear in exactly one group, or startup fails. A camera
+# nobody runs is a camera nobody is watching.
+
+groups:
+  - name: bullying_hall
+    cameras: [hall_left, hall_right]
+    device: "cuda:0"
+
+  - name: bullying_stairs_yard
+    cameras: [stairs_floor1, stairs_floor2, stairs_floor2_aux, yard_entry]
+    device: "cuda:0"
+
+  # The corridor cameras own the meal-session state machine, and they are the
+  # latency-sensitive ones. They get their own InsightFace instance so the inside
+  # cameras cannot starve a recognition at the door.
+  - name: canteen_corridor
+    cameras: [canteen_entry, canteen_exit]
+    device: "cuda:0"
+
+  - name: canteen_inside
+    cameras: [canteen_inside_left, canteen_inside_service]
+    device: "cuda:0"
+
+restart_backoff_seconds: 2.0
+restart_backoff_max_seconds: 60.0

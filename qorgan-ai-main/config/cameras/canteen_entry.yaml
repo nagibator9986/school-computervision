@@ -1,0 +1,9 @@
+profile: canteen_entry
+
+name: canteen_entry
+display_name: "Коридор у столовой (вход)"
+location: "Коридор перед столовой / правая сторона"
+priority: 10
+
+rtsp:
+  host: "192.168.1.12"

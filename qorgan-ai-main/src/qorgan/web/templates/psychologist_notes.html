@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ history.display }} — заметки — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Заметки: {{ history.display }} <span class="muted">{{ history.external_id }}</span></h1>
+
+<p class="meta">
+  <a href="/psychologist">← кабинет</a>
+  &middot; {{ history.class_name or "—" }}
+  &middot; <a href="/psychologist/pupils/{{ history.person_id }}">посещаемость по неделям</a>
+</p>
+
+<p class="meta">
+  <span class="tag critical">конфиденциально</span>
+  Эти записи не видит ни оператор, ни администратор школы — §13 говорит это прямо.
+  Заметки нельзя изменить и нельзя удалить: исправление — это новая заметка,
+  а прежняя остаётся.
+</p>
+
+{% if error %}
+{# The rule, never the text that was refused: a note about a child must not be echoed into
+   an error banner or into a log line. #}
+<p class="meta error">{{ error }}</p>
+{% endif %}
+
+<form method="post" action="/psychologist/notes/{{ history.person_id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>
+    Новая заметка
+    <textarea name="body" rows="5" required></textarea>
+  </label>
+  <button type="submit">Сохранить</button>
+</form>
+
+<h2>Записи <span class="muted">({{ history.notes | length }})</span></h2>
+<div class="cv-scroll">
+<table>
+  <thead>
+    <tr><th>Когда</th><th>Кто</th><th>Заметка</th></tr>
+  </thead>
+  <tbody>
+    {% for note in history.notes %}
+    <tr>
+      <td>{{ note.created_at }}</td>
+      <td>{{ note.author }}</td>
+      {# Autoescaped by Jinja, and the server renders the DOM: no JavaScript builds this
+         from a string. See web/templating.py on the legacy's stored XSS. #}
+      <td>{{ note.body }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="empty-cell">Записей нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

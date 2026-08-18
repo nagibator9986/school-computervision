@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% import "cv_macros.html" as cv %}
+{% block title %}Кадры урока {{ lesson.date_local or lesson.id }} — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Как это выглядело на записи
+  <span class="muted">· {{ lesson.date_local or 'без даты' }} · комната {{ lesson.camera_key }}
+    · класс {{ lesson.class_key }}</span>
+  {{ cv.demo_tag(lesson.is_demo) }}</h1>
+
+{# Only when there is something to describe: a paragraph explaining how the stills were chosen,
+   above a notice saying there are none, promises a gallery the page does not have. #}
+{% if frames %}
+<p class="cv-lede">Кадры выбраны там, где что-то происходит: поднятая рука, выход с места,
+  опущенная голова, перемещение взрослого. Рамка — это <b>место</b>, подпись — состояние этого
+  места в эту секунду по его собственной временной шкале. Рядом с каждым кадром — то, что
+  измерено по этому месту за весь урок, вместе с видимостью.</p>
+{% endif %}
+
+<p class="cv-note">
+  <a class="button" href="/psychologist/lessons/{{ lesson.id }}">← к разбору урока</a>
+  Кадров: {{ frames | length }}. Разбор: <code>{{ run.run_id }}</code>,
+  {{ run.analysed_frames }} кадров при {{ run.sample_fps }} кадра в секунду.
+</p>
+
+{% if empty_reason_ru %}
+  <p class="warning">{{ empty_reason_ru }}</p>
+{% endif %}
+
+{% if frames %}
+<div class="cv-legend">
+  {% for label, kind in legend %}
+    <span class="cv-key cv-{{ kind }}">{{ label }}</span>
+  {% endfor %}
+</div>
+
+{{ cv.reading_block(reading) }}
+
+{% for frame in frames %}
+<section class="cv-frame">
+  <div class="cv-shot">
+    <img src="{{ frame.image_url }}" alt="кадр записи на {{ frame.minute_ru }}" loading="lazy">
+    {% for box in frame.boxes %}
+      {# Positioned in PERCENT of the picture, so the overlay stays on the pupil at any width.
+         The label is text rather than pixels burned into the JPEG: a rectangle drawn into the
+         image cannot be linked to the place it belongs to and cannot be told apart from a
+         detector's output at a glance. #}
+      <span class="cv-box cv-{{ box.kind }} {{ 'cv-box-unmeasured' if not box.measured }}"
+            style="left: {{ box.left }}%; top: {{ box.top }}%;
+                   width: {{ box.width }}%; height: {{ box.height }}%">
+        {# The number always, the STATE only where the state is something other than sitting or
+           unobserved. Nine labels reading «место N · сидит на месте» over one classroom overlap
+           into each other and hide the one box that says «встал» -- the table beside the picture
+           carries every state for every place, so the overlay is free to show the difference. #}
+        <span class="cv-box-label">{{ box.short_ru }}{% if box.kind in ('action', 'posture', 'moved') %}
+          · {{ box.state_ru }}{% endif %}</span>
+      </span>
+    {% endfor %}
+  </div>
+
+  <div class="cv-shot-facts">
+    {# The time of day comes second and in the school's own zone, because the camera burns its
+       own timestamp into the picture beside it -- see `cabinet.local_clock`. #}
+    <h2>{{ frame.minute_ru }} <span class="muted">от начала записи ·
+      {{ frame.wall_clock_ru }}</span></h2>
+    <p class="cv-happening">{{ frame.happening_ru }}</p>
+    <div class="cv-scroll">
+    <table>
+      <thead><tr><th>место</th><th>состояние в этот кадр</th><th>видимость за урок</th>
+        <th>индекс за урок</th></tr></thead>
+      <tbody>
+      {% for box in frame.boxes %}
+        <tr class="{{ 'cv-adult' if box.role == 'adult' }}">
+          <td>
+            {% if box.place_id %}
+              <a href="/psychologist/places/{{ box.place_id }}">{{ box.label_ru }}</a>
+            {% else %}{{ box.label_ru }}{% endif %}
+            {% if box.clamped %}<span class="tag">у края кадра</span>{% endif %}
+          </td>
+          <td>
+            {% if box.measured %}<span class="cv-key cv-{{ box.kind }}">{{ box.state_ru }}</span>
+            {% else %}<span class="cv-unmeasured">{{ box.state_ru }}</span>{% endif %}
+          </td>
+          <td>{{ cv.coverage(box.coverage_percent) }}</td>
+          <td>
+            {% if box.index_text == 'не измерялось' %}
+              <span class="cv-unmeasured">не измерялось</span>
+            {% else %}{{ box.index_text }}{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="cv-caveat">{{ frame.caveat_ru }}</p>
+  </div>
+</section>
+{% endfor %}
+
+<details class="cv-footnotes">
+  <summary>Что здесь рамка, а что нет — прочитайте до того, как показывать кадр кому-то ещё</summary>
+  <p>Источник рамок этого урока: <code>{{ frames[0].box_source }}</code>. При
+    <code>place_geometry</code> прямоугольник построен по геометрии МЕСТА — его центру и ширине
+    плеч, измеренным за весь урок, — а не по выходу детектора на этом кадре: артефакт разбора
+    покадровых рамок не хранит. Это область, в которой копились счётчики места. Прямоугольник,
+    нарисованный на ребёнке, читается как «модель его нашла» независимо от того, что написано в
+    столбце, поэтому фраза стоит под каждой картинкой.</p>
+  <p>Состояние берётся из временной шкалы места и сохраняет признак «наблюдалось». Там, где
+    слежение место потеряло, подпись говорит «не наблюдалось» и никакого состояния не
+    показывает: «мы не видели» и «сидел спокойно» — разные факты, и выглядеть одинаково они не
+    должны.</p>
+  <p>Ни одна подпись здесь не говорит о внимании, интересе или вовлечённости. Всё, что
+    показано, — поза и положение в комнате.</p>
+</details>
+{% endif %}
+{% endblock %}

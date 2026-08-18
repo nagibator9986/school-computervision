@@ -1,0 +1,117 @@
+# Secrets — never commit. Only .env.example is tracked.
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/
+media/
+logs/
+
+# Photographs of children. These arrive from the school as loose folders and land
+# wherever they are unzipped -- which is how they end up NEXT TO the repo root rather
+# than under media/, where the rules above would have caught them. Named explicitly,
+# because `git add -A` does not ask twice and a push cannot be taken back.
+student_photos/
+original_student_photos/
+*_student_photos/
+
+# Evaluation footage. `eval/labels.csv` and `eval/baseline.json` are the *results* and
+# belong in git; the clips they refer to are video of children and never do. Nor do the
+# crop ROIs, nor the candidate/sample lists, whose every row names a child's clip.
+eval/clips/
+eval/crops/
+eval/candidates.csv
+eval/candidates.coverage.csv
+eval/candidates.unreadable.csv
+eval/sample.csv
+# `eval scan` rewrites its artifacts after every clip, through a temp file renamed over the
+# real one. A run killed inside a write leaves one behind, and it names clips too.
+eval/*.partial
+
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+
+# Model weights (fetched by scripts/fetch_models.py).
+#
+# ANCHORED with a leading slash, and it must stay that way. An un-anchored `models/`
+# matches a directory named `models` at ANY depth -- which silently excluded
+# `src/qorgan/db/models/` (8 files: Person, Event, CanteenSession, auth...) and
+# `src/qorgan/models/` (PersonDetector, PoseEstimator) from the repository entirely.
+# Everything ran fine on the machine that had them on disk; a fresh clone could not
+# import qorgan.db.models at all. The tests never caught it, because tests run against
+# the disk, not against git.
+/models/
+*.pt
+*.onnx
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Clips we could not attribute to a camera. Video of children; awaiting the school.
+eval/unresolved/
+
+# Loose folders of children that land beside the repo root because that is how the school
+# sends them: an archive, unzipped where it was downloaded. Every one of these was found
+# UNIGNORED and one frame from being pushed.
+#
+# `git check-ignore -q some_dir/` is NOT how you check this -- it answers about the
+# directory and lied about all four of these. Ask about a FILE, or ask `git add -An` and
+# read what it says it would add. That is the only check that has ever caught anything here.
+#
+# ANCHORED to the repo root with a leading slash, on purpose. An unanchored `faces/`
+# matches ANY directory of that name -- including `src/qorgan/faces/` and
+# `src/qorgan/canteen/`, the source packages. It did: a new file under either would have
+# been silently ignored, and an agent had to `git add -f` to commit `faces/gallery.py`.
+# The school dumps its archives at the ROOT, so anchor there and stop shadowing source.
+/Bandicut/
+/faces/
+/crops/
+/snapshots/
+/bullying_camera/
+/class/
+# Added 2026-07-27, and it is the fifth time this comment block has been proved right:
+# this delivery sat UNIGNORED for a day and `git add -An` listed 323 of its paths, 141 of
+# them photographs of children. Only the OUTER directory name is clean UTF-8; the inner
+# ones are UTF-8 bytes stored as CP866 (`1╨Р` is `1А`), so anchor on the outer name and
+# verify with `git check-ignore -v` against a FILE inside, never against the directory.
+# NOT quoted: .gitignore has no quoting, a `"` is a literal character. The quoted form was
+# written first and `git add -An` still listed all 323 paths -- which is why that check is
+# the one this block insists on.
+/фотки учеников/
+
+# The school's own labelling spreadsheet. Names of children against incidents, which is
+# the most sensitive file they have sent yet.
+*.xlsx
+
+# Every archive: the school sends footage and class photos as .zip, unzipped where it
+# lands. Naming each folder as it arrives is how we got to six rules and one near miss.
+*.zip
+
+# Any video, anywhere. The school sends canteen footage and screen recordings straight
+# into the repo root, and naming each new folder was always going to lose the race. A
+# screen recording of the dashboard shows children's faces on the recognition view.
+*.mp4
+*.avi
+*.mov
+*.mkv
+# Root-anchored: an unanchored `canteen/` shadowed the `src/qorgan/canteen/` package.
+/canteen/

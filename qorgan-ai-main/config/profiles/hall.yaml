@@ -1,0 +1,99 @@
+# Main hall cameras. Wide, busy, high foot traffic past the main entrance.
+#
+# The hall is where false positives live: two people walking past each other at a
+# doorway look exactly like an approach. Hence the strictest settings in the fleet --
+# the final-confirmation gate is on, the flow-zone damping is the harshest (x0.20),
+# and the alert bar inside a flow zone is raised to 5.0.
+
+# ---------------------------------------------------------------------------
+# ANALYSIS RESOLUTION. Every frame reaching the detector on this camera type is resized
+# to capture.frame_width x frame_height (base.yaml, or the override below) by the one
+# shared qorgan.capture.frames.prepare_frame(). Every px/s and px/s^2 threshold in this
+# file -- and the noise floor they were checked against -- is expressed in pixels of THAT
+# frame. Change the resolution and every one of them is void.
+# ---------------------------------------------------------------------------
+
+camera_type: bullying
+role: main_hall
+
+capture:
+  frame_width: 1280
+  frame_height: 720
+  # No stream_fps override: the sub-stream rate is a property of the NVR, not of this
+  # profile, and base.yaml states it once. The `display_fps: 10` that used to sit here was
+  # what made the harness grade these cameras at 10 fps while the loop ran at 15.
+
+yolo:
+  imgsz: 768
+  conf: 0.22
+
+# ---------------------------------------------------------------------------
+# UNITS. Speeds here are px/SECOND and accelerations px/second^2.
+#
+# The legacy measured speed in px/FRAME and acceleration in the incoherent mixed unit
+# (px/frame)/s, so every threshold it shipped meant something different on every camera
+# and changed meaning whenever the frame rate did. Most values below are its values,
+# converted at its ~10 fps analysis rate.
+#
+# They are therefore STARTING POINTS, not tuned values. There is no exact conversion
+# from a number that was tuned against an uncontrolled frame rate. The eval harness
+# exists to re-derive them against labelled footage, and until it has, treat every
+# speed and acceleration here as provisional.
+#
+# `window_drop_threshold` is genuinely in PIXELS (it is a displacement, not a rate), so
+# it did not need converting.
+# ---------------------------------------------------------------------------
+
+bullying:
+  alert_score_threshold: 1.4
+
+  metrics:
+    proximity_threshold: 160        # px
+    close_distance_ratio: 0.90
+    contact_distance_ratio: 0.55
+    speed_threshold: 220            # px/s    (legacy 22 px/frame)
+    min_relative_speed: 120         # px/s    (legacy 12)
+
+    # NOT a conversion of the legacy's 6. That would be 60 -- and 60 is BELOW this
+    # camera's noise floor: a YOLO box wobbles ~3 px on a person, the tracker reads the
+    # wobble as acceleration, and an ordinary walk down this hall crosses 60 px/s^2 on
+    # ~12% of its frames. The legacy value was not merely in the wrong units; it was the
+    # wrong number, and converting it faithfully preserved the mistake in better units.
+    #
+    # Measured floor here (10 fps, smoothing 0.45, +/-3 px wobble): p99 105, peak 138.
+    # A real shove peaks near 800. So the threshold goes above the noise and far below
+    # the signal. See `qorgan eval noise-floor` and tests/test_noise_floor.py -- which
+    # FAILS if anyone lowers this back under the floor.
+    #
+    # Still provisional: the floor is synthetic until somebody records this corridor.
+    acceleration_threshold: 220     # px/s^2  (floor p99 x 2)
+
+    window_drop_threshold: 6        # px      (a displacement; unchanged)
+    direction_change_threshold_deg: 35
+    min_box_area: 2500
+    tracker_max_lost: 18
+    tracker_smoothing: 0.45
+
+  counters:
+    red_hold_seconds: 2.5
+    min_aggression_frames: 2
+    min_pair_persistence_frames: 2
+
+  gates:
+    static_close:
+      min_frames: 4
+    crossing_pass:
+      max_contact_frames: 1
+      max_overlap_frames: 2
+    # Hall cameras demand sustained contact or overlap before a pair may alert.
+    hall_confirmation:
+      enabled: true
+      sustained_contact_min: 3
+      sustained_overlap_min: 3
+
+  skeleton:
+    min_frames: 4
+    max_frames: 16
+
+  event_merge:
+    spatial_threshold: 0.20

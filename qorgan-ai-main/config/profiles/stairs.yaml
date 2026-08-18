@@ -1,0 +1,67 @@
+# Stairwell cameras.
+#
+# People legitimately pass very close on stairs -- there is nowhere else to go --
+# so the proximity threshold is widened inside the staircase zone (x1.6) and a
+# dedicated gate suppresses the "one standing, one walking past" pattern.
+
+# ---------------------------------------------------------------------------
+# ANALYSIS RESOLUTION. Every frame reaching the detector on this camera type is resized
+# to capture.frame_width x frame_height (base.yaml, or the override below) by the one
+# shared qorgan.capture.frames.prepare_frame(). Every px/s and px/s^2 threshold in this
+# file -- and the noise floor they were checked against -- is expressed in pixels of THAT
+# frame. Change the resolution and every one of them is void.
+# ---------------------------------------------------------------------------
+
+camera_type: bullying
+role: stairs
+
+yolo:
+  conf: 0.22
+
+# Speeds are px/s, accelerations px/s^2 — converted from the legacy's px/frame at its
+# ~10 fps analysis rate, and provisional until the eval harness re-derives them.
+# See config/profiles/hall.yaml for the full explanation.
+
+bullying:
+  alert_score_threshold: 1.4
+
+  metrics:
+    proximity_threshold: 160        # px
+    close_distance_ratio: 0.90
+    contact_distance_ratio: 0.50
+    speed_threshold: 220            # px/s    (legacy 22)
+    min_relative_speed: 120         # px/s    (legacy 12)
+
+    # Above this camera's noise floor, NOT a conversion of the legacy's 6 (= 60 px/s^2,
+    # which sits inside the floor -- see hall.yaml). Heavier smoothing (0.55) buys a
+    # quieter floor here than the hall gets: measured p99 67, peak 85, against a shove
+    # near 680. So this can afford to be more sensitive than the hall's 220.
+    acceleration_threshold: 150     # px/s^2  (floor p99 x 2, rounded up)
+
+    window_drop_threshold: 6        # px
+    direction_change_threshold_deg: 35
+    min_box_area: 2500
+    tracker_max_lost: 18
+    tracker_smoothing: 0.55
+
+  gates:
+    static_close:
+      min_frames: 5
+    crossing_pass:
+      max_contact_frames: 1
+      max_overlap_frames: 2
+    staircase_pass:
+      enabled: true
+      max_contact_frames: 3
+      max_overlap_frames: 3
+      # px/SECOND, both of them. These shipped as 4.0 / 8.0 -- the legacy's px/FRAME
+      # values -- and were compared against Track.speed in px/s. A person standing
+      # perfectly still reads well above 4 px/s from box jitter alone, so `a_static` was
+      # never true and this gate, the ONE suppression the stairs have, could not fire.
+      # See tests/test_noise_floor.py::test_a_standing_person_reads_as_static_on_the_stairs.
+      static_speed_threshold: 40.0    # px/s  (legacy 4.0 px/frame)
+      moving_speed_threshold: 80.0    # px/s  (legacy 8.0 px/frame)
+
+  skeleton:
+    min_frames: 8
+    max_frames: 16

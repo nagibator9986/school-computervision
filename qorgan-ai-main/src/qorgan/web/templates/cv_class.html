@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}{{ class_key }} — Qorgan AI{% endblock %}
+
+{% block content %}
+<nav class="crumbs" aria-label="Путь">
+  <a href="/psychologist/classes">Классы</a>
+  <span aria-hidden="true">/</span>
+  <span aria-current="page">{{ class_key }}</span>
+</nav>
+
+<h1>Класс {{ class_key }}
+  <span class="muted">
+    {% if first_day %}· {{ first_day }} — {{ last_day }}{% endif %}
+  </span>
+</h1>
+
+<div class="tiles">
+  <div class="tile">
+    <span class="value">{{ lessons | length }}</span>
+    <span class="label">уроков разобрано</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ pupil_places }}</span>
+    <span class="label">ученических мест</span>
+  </div>
+  <div class="tile {{ 'ok' if named_places == pupil_places and pupil_places else 'alert' }}">
+    <span class="value">{{ named_places }}</span>
+    <span class="label">мест с подписанным планом</span>
+  </div>
+  <div class="tile">
+    <span class="value">
+      {% if coverage_median is none %}<span class="cv-unmeasured">не измерялось</span>{% else %}{{ coverage_median }}%{% endif %}
+    </span>
+    <span class="label">видимость места, медиана</span>
+  </div>
+</div>
+
+{# Two views of the same class, and a class recorded in two rooms keeps them apart inside
+   the first: «место 1» on one camera and «место 1» on the other are DIFFERENT chairs with
+   different histories, and only one of the two plans here is signed. Merging them would
+   merge two children. #}
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" aria-controls="tab-pupils"
+          id="t-pupils">Ученики</button>
+  <button class="tab" role="tab" aria-selected="false" aria-controls="tab-lessons"
+          id="t-lessons">Уроки <span class="muted">({{ lessons | length }})</span></button>
+</div>
+
+<section class="tabpanel" id="tab-pupils" role="tabpanel" aria-labelledby="t-pupils">
+  {% for group in groups %}
+  <div class="room">
+    <h2>Комната {{ group.camera_key }}</h2>
+    {% if group.attested %}
+    <p class="meta">
+      <span class="tag ok">план рассадки подписан</span>
+      Подписал: {{ group.signed_by }}. Основание: {{ group.decision_ref }}.
+      Действует с {{ group.valid_from_ru }}.
+    </p>
+    {% else %}
+    <p class="meta">
+      <span class="tag">плана рассадки нет</span>
+      Места этой комнаты названы местами, а не детьми. Ни лицо, ни трекер имени здесь не
+      создают: динамика по неделям — это утверждение о ребёнке, и она появится только
+      после подписанного плана.
+    </p>
+    {% endif %}
+
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>место и ученик</th><th>роль</th><th>уроков</th>
+          <th>видимость, медиана</th><th>индекс, последний урок</th><th>с первого урока</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pupil in group.pupils %}
+        <tr class="{{ 'cv-adult' if pupil.role == 'adult' }}">
+          <td>
+            <a href="/psychologist/places/{{ pupil.place_id }}">{{ pupil.label_ru }}</a>
+            {% if pupil.person_name %}<br><span class="muted">{{ pupil.person_name }}</span>{% endif %}
+          </td>
+          <td class="muted">{{ 'ученик' if pupil.role == 'pupil' else 'взрослый' }}</td>
+          <td>{{ pupil.lessons }}</td>
+          <td>
+            {% if pupil.coverage_median is none %}<span class="cv-unmeasured">не измерялось</span>
+            {% else %}<span class="cv-cov" style="--cov: {{ pupil.coverage_median }}%">{{ pupil.coverage_median }}%</span>{% endif %}
+          </td>
+          <td>{% if pupil.latest_index is none %}<span class="cv-unmeasured">не измерялось</span>
+              {% else %}<b>{{ pupil.latest_index }}</b>{% endif %}</td>
+          {# A word, never a colour alone, and never the word «спад»: whether a change is a
+             TREND is decided in the analyser against the child's own median and MAD, and
+             that calculation does not live on this page. #}
+          <td class="muted">{{ pupil.direction_ru }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty-cell">В этой комнате мест не обнаружено.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="tabpanel" id="tab-lessons" role="tabpanel" aria-labelledby="t-lessons" hidden>
+  <div class="table-scroll">
+  <table>
+    <thead>
+      <tr><th>дата</th><th>неделя</th><th>комната</th><th>длительность</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for lesson in lessons %}
+      <tr>
+        <td><a href="/psychologist/lessons/{{ lesson.id }}">
+          {{ lesson.date_local or 'дата не прочитана' }}</a></td>
+        <td class="muted">
+          {% if lesson.iso_week %}{{ lesson.iso_year }}-W{{ '%02d' % lesson.iso_week }}
+          {% else %}нет недели{% endif %}</td>
+        <td>{{ lesson.camera_key }}</td>
+        <td>{{ lesson.duration_minutes | round(1) }} мин</td>
+        <td><a href="/psychologist/lessons/{{ lesson.id }}/frames">кадры записи →</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-cell">Уроков нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

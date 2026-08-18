@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Камеры — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Камеры</h1>
+
+{# The server renders the DOM. JavaScript only refreshes image sources and text --
+   it never builds markup from strings. The legacy built the whole grid with
+   innerHTML from server JSON, so a pupil named `<img src=x onerror=...>` gave
+   stored XSS in the operator's browser (audit H-05). #}
+<section class="grid">
+  {% for camera in cameras %}
+  {# The state classes are emitted SERVER-SIDE, exactly as /cameras does it. They used to be
+     set only by `preview.js` after a successful fetch, so the first paint -- and every paint
+     when the fetch fails -- showed a green pill with the word «offline» inside it. A colour
+     that contradicts the word beside it is worse than no colour. JS still updates both on
+     each tick; it is now correcting a true value rather than supplying a missing one. #}
+  <article class="cam{% if not camera.live %} offline{% endif %}" data-camera="{{ camera.name }}">
+    <div class="frame">
+      <img src="/preview/{{ camera.name }}.jpg" alt="{{ camera.display_name }}"
+           data-src="/preview/{{ camera.name }}.jpg">
+      <span class="badge {{ camera.status }}" data-role="status">{{ camera.status }}</span>
+    </div>
+    <h2>{{ camera.display_name }}</h2>
+    <p class="meta">{{ camera.location }}</p>
+    <p class="meta">
+      <span class="tag">{{ camera.role }}</span>
+      {% if not camera.enabled %}<span class="tag off">отключена</span>{% endif %}
+    </p>
+  </article>
+  {% endfor %}
+</section>
+
+<h2>Воркеры</h2>
+<div class="table-scroll">
+<table class="workers">
+  <thead>
+    <tr>
+      <th>Группа</th><th>Состояние</th><th>PID</th>
+      <th>Перезапусков</th><th>Последний сигнал</th><th>Ошибка</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for worker in workers %}
+    <tr>
+      <td>{{ worker.group }}</td>
+      <td><span class="tag {{ worker.state }}">{{ worker.state }}</span></td>
+      <td>{{ worker.pid or "—" }}</td>
+      <td>{{ worker.restarts }}</td>
+      <td class="nowrap">{% if worker.seconds_since_beat is not none %}{{ worker.seconds_since_beat }} с назад{% else %}—{% endif %}</td>
+      <td class="wrap">{{ worker.last_error or "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Ни один воркер не отчитался. Запущен ли супервизор?</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/preview.js" defer></script>
+{% endblock %}

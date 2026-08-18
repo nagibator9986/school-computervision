@@ -1,0 +1,126 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qorgan"
+version = "2.0.0"
+description = "School video analytics: bullying detection, canteen attendance, dashboard."
+requires-python = ">=3.11,<3.12"
+
+# Pinned from the legacy machine's known-good environment (gpu_env_ok.txt).
+# Anything that needs the CUDA wheel index lives in the [ai] extra below.
+dependencies = [
+    "fastapi==0.136.3",
+    "uvicorn==0.48.0",
+    "starlette==1.2.0",
+    "jinja2==3.1.6",
+    "python-multipart==0.0.29",
+    "itsdangerous==2.2.0",
+    # bcrypt directly, not passlib: passlib is unmaintained since 2020 and its bcrypt
+    # backend is broken against bcrypt >= 4.1.
+    "bcrypt==5.0.0",
+    "httpx==0.28.1",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.7.1",
+    "python-dotenv==1.2.2",
+    "PyYAML==6.0.3",
+    "SQLAlchemy==2.0.44",
+    "alembic==1.14.1",
+    "pyzmq==26.2.1",
+    "psutil==7.2.2",
+    "numpy==2.4.4",
+    "pillow==12.2.0",
+    "opencv-python==4.13.0.92",
+    # Windows has no system IANA timezone database; zoneinfo needs this or
+    # SCHOOL_TIMEZONE cannot be resolved at all.
+    "tzdata==2025.2",
+]
+
+[project.optional-dependencies]
+# Install with the CUDA index, then run `qorgan doctor`. See README.
+#
+# Two silent-CPU-fallback traps live in here, both measured, both real:
+#
+# 1. torch must resolve to the +cu128 build. A bare `pip install torch` gives a CPU
+#    build that works fine and is ~40x too slow -- the H-14 defect from the audit.
+# 2. `insightface` depends on plain `onnxruntime`, which SHADOWS `onnxruntime-gpu`
+#    and takes CUDAExecutionProvider with it. pip will install both without
+#    complaining. Fix after install:
+#        pip uninstall -y onnxruntime
+#        pip install --force-reinstall --no-deps onnxruntime-gpu==1.26.0
+#    `qorgan doctor` and tests/test_gpu.py both catch it if it comes back.
+ai = [
+    "torch==2.11.0+cu128",
+    "torchvision==0.26.0+cu128",
+    "ultralytics==8.4.56",
+    "onnxruntime-gpu==1.26.0",
+    # gpu.py builds a real ONNX session to prove CUDA is reachable (spec §3). insightface
+    # already pulls this in; we import it, so we pin it.
+    "onnx==1.22.0",
+    "insightface==1.0.1",
+    "imageio-ffmpeg==0.6.0",
+]
+dev = [
+    "pytest==8.3.4",
+    "pytest-cov==6.0.0",
+    "ruff==0.9.6",
+    "freezegun==1.5.1",
+]
+eval = ["matplotlib==3.10.9"]
+
+[project.scripts]
+qorgan = "qorgan.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:qorgan.*"]
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py311"
+exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C90", "PL", "RUF", "S"]
+ignore = [
+    "PLR0913",
+    "S101",
+    # RUF001/2/3 flag Cyrillic characters that look like Latin ones. This is a Russian-
+    # language school: class names ("5-А"), the `учитель` roster folder, and every
+    # operator-facing string are Cyrillic, so the rule fires on essentially every line of
+    # domain text.
+    #
+    # The hazard the rule exists for -- a homoglyph making one person look like two --
+    # cannot bite here any more. Identity is the school's own id, read from the filename
+    # (`student_333`), which is ASCII. See qorgan/identity/roster.py.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "PLR2004"]
+# The autostart tests RUN the launchers rather than reading them: a regex asserting that
+# a .bat contains `cd /d "%~dp0.."` proves nothing about what cmd.exe does with it, and
+# the working directory is the whole feature. So:
+#   S603/S607 -- starting cmd.exe and powershell.exe by name is the point of the file,
+#                and every argument is a path this test just constructed.
+#   S314      -- the XML parsed here is deploy/*.xml, committed in this repo and written
+#                by us. It is not untrusted input, and adding a defusedxml dependency to
+#                read our own four files would be worse than this line.
+# Importing a pytest FIXTURE by name and then naming it as a test parameter reads to a
+# linter as shadowing an unused import (F811). To pytest it is the documented way to
+# share fixtures across files. The alternative -- moving every page's fixtures into the
+# shared conftest.py -- is how one file becomes the place every branch collides.
+"tests/test_web_logs.py" = ["S105", "S106", "PLR2004", "F811"]
+"tests/test_web_logs_leaks.py" = ["S105", "S106", "PLR2004", "F811"]
+"tests/test_autostart.py" = ["S105", "S106", "PLR2004", "S314", "S603", "S607"]

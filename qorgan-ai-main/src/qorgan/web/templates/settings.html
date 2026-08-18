@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Настройки — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Настройки</h1>
+
+{# READ-ONLY, and there is no form on this page by design. A browser that edits YAML is a
+   second source of truth for a value the supervisor loaded at startup, and "true in one
+   layer, silently wrong in the next" is this project's signature disease. Every value
+   below therefore carries the file that supplies it. See web/routes/settings.py. #}
+{# Says the second half of the truth, in the product rather than only in a comment: this
+   page reads the files NOW, and every process that acts on them read them WHEN IT STARTED.
+   Leaving that out would present "what is in the file" as "what is running" -- a value
+   true in one layer and silently wrong in the next, which is the exact fault this page
+   was built to expose. It applies to the dashboard's own camera list too: the web process
+   loads the fleet once at startup (web/app.py, lifespan). #}
+<p class="warning">
+  Страница только показывает, и показывает файлы на диске в этот момент. Супервизор,
+  воркеры и сам веб-процесс прочитали эти файлы при своём запуске — после правки нужен
+  перезапуск, иначе в силе останется прочитанное при старте, а список камер на странице
+  «Камеры» может расходиться с тем, что здесь.
+</p>
+
+{% if config_error %}
+<p class="error">Конфигурация не читается: {{ config_error }}</p>
+{% endif %}
+
+<h2>Управление</h2>
+<div class="table-scroll">
+<table class="workers">
+  <thead>
+    <tr><th>Что</th><th>Сейчас</th><th>Изменение</th></tr>
+  </thead>
+  <tbody>
+    {% for control in controls %}
+    <tr>
+      <td>{{ control.title }}</td>
+      <td>{{ control.state }}</td>
+      <td>
+        {% if control.available %}<span class="tag running">доступно</span>
+        {% else %}<span class="tag off">недоступно</span>{% endif %}
+        <span class="meta">{{ control.reason }}</span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Интеграции</h2>
+<div class="table-scroll">
+<table class="workers">
+  <thead>
+    <tr><th>Что</th><th>Состояние</th><th>Примечание</th></tr>
+  </thead>
+  <tbody>
+    {% for integration in integrations %}
+    <tr>
+      <td>{{ integration.title }}</td>
+      <td><span class="tag">{{ integration.state }}</span></td>
+      <td><span class="meta">{{ integration.note }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Камеры</h2>
+{% for camera in cameras %}
+<details class="camera-config">
+  <summary>
+    <strong>{{ camera.display_name }}</strong>
+    <span class="meta">{{ camera.name }}</span>
+    <span class="tag">{{ camera.role }}</span>
+    <span class="tag">{{ camera.camera_type }}</span>
+    {% if not camera.enabled %}<span class="tag off">отключена</span>{% endif %}
+  </summary>
+
+  <p class="meta">{{ camera.location }}</p>
+  {# The merge order, in full. "Which file wins" is the question this page answers, and a
+     reader who cannot see the order cannot check our answer. #}
+  <p class="meta">
+    Порядок слоёв (последний побеждает):
+    {% for file in camera.chain %}<code>{{ file }}</code>{% if not loop.last %} → {% endif %}{% endfor %}
+  </p>
+
+  {% for section in camera.sections %}
+  <h3>{{ section.title }}</h3>
+  <div class="table-scroll">
+  <table class="workers settings">
+    <thead>
+      <tr><th>Ключ</th><th>Значение</th><th>Слой</th><th>Меняется в</th></tr>
+    </thead>
+    <tbody>
+      {% for setting in section.settings %}
+      <tr>
+        <td><code>{{ setting.key }}</code></td>
+        <td><code>{{ setting.value }}</code></td>
+        <td><span class="tag {{ setting.layer }}">{{ setting.layer }}</span></td>
+        <td><code>{{ setting.source }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endfor %}
+</details>
+{% else %}
+<p class="meta">Ни одной камеры не прочитано.</p>
+{% endfor %}
+{% endblock %}

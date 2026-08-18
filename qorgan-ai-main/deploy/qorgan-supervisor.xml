@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Qorgan AI - the worker fleet. Registered by deploy/install-autostart.bat, which
+  rewrites __QORGAN_ROOT__ and __QORGAN_USER__ before handing this to schtasks.
+  Do not register this file by hand with the placeholders still in it: Task Scheduler
+  accepts a Command pointing at a directory called __QORGAN_ROOT__ without complaint,
+  and the task then simply never runs.
+
+  The settings below are not decoration. Task Scheduler's DEFAULTS are wrong for a
+  service that watches children in a corridor, in four separate ways, and each one is
+  called out where it appears.
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Qorgan AI - the camera worker fleet (bullying detection and canteen attendance). Runs until the machine is switched off.</Description>
+    <URI>\Qorgan AI\qorgan-supervisor</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <!-- At boot: the machine must come back from a 3am Windows Update watching the
+         corridors, with nobody logging in. -->
+    <BootTrigger>
+      <Enabled>true</Enabled>
+      <!-- The network stack and the NVRs are not necessarily up the instant this is.
+           The supervisor reconnects on its own, but there is no reason to spend the
+           first minute of every boot doing it. -->
+      <Delay>PT30S</Delay>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <!-- A REAL USER, not S-1-5-18 (LOCAL SYSTEM), and this is load-bearing:
+           InsightFace resolves its buffalo_l model pack out of ~/.insightface. As
+           SYSTEM that is C:\Windows\System32\config\systemprofile\.insightface, where
+           the 341 MB pack is not - so face recognition would either re-download it to
+           a folder nobody knows about or fail outright on a machine with no internet.
+           See HANDOVER.md section 0. -->
+      <UserId>__QORGAN_USER__</UserId>
+      <!-- "Run whether user is logged on or not". schtasks prompts for the password
+           once, at registration, and Windows keeps it in Credential Manager. It is
+           never written into this file. -->
+      <LogonType>Password</LogonType>
+      <!-- LeastPrivilege: this process reads camera streams, a GPU and files under
+           the install root. It needs administrator for none of them, and it handles
+           live video and photographs of children - the last thing that should run
+           with more rights than it uses. (Registering the task DOES need an admin
+           prompt, because a BootTrigger does; that is install-autostart.bat's
+           problem, once, and not this process's privilege forever.) -->
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <!-- Two supervisors on one GPU means two processes per camera, two writers to the
+         database, and a memory plan (config/workers.yaml) that was measured for one. -->
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <!-- Windows would otherwise stop this because the machine "looks idle". Nobody
+           is at the keyboard of a camera server; that is what it is for. -->
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>false</WakeToRun>
+    <!-- PT0S = no limit. THE DEFAULT IS PT72H: Task Scheduler would kill the fleet
+         after three days, at a moment nobody could predict, and nothing would report
+         it - a task Windows stopped has not crashed, so the supervisor is not there to
+         restart itself. The cameras would simply go dark every third day. -->
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>5</Priority>
+    <RestartOnFailure>
+      <!-- The supervisor already restarts individual workers (rule R7). This is the
+           layer above: if the supervisor itself dies, something must restart IT. -->
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <!-- Through the .bat, never python.exe directly. The .bat anchors the working
+           directory to its own location, so this task is correct even if the
+           WorkingDirectory below is ever edited to something wrong. -->
+      <Command>__QORGAN_ROOT__\deploy\qorgan-supervisor.bat</Command>
+      <WorkingDirectory>__QORGAN_ROOT__</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

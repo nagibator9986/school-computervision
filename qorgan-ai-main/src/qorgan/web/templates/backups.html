@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Резервные копии — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Резервные копии базы данных</h1>
+
+{# BOTH of these render on every load, always, and neither is behind a condition.
+   They are not warnings about a problem -- they are what a backup IS here, and the moment
+   they only appear "when relevant" is the moment somebody reads a green list of files and
+   concludes the school's data is safe. docs/windows-autostart.md §4 tells the engineer
+   these same two things; the page and the runbook must not drift, because the person
+   reading each of them is deciding the same question about the same file. #}
+<p class="warning">
+  <b>«Копия сделана» не значит «данные в безопасности».</b> Папка с копиями — это
+  <b>тот же диск</b>, на котором лежит сама база. Сгорит диск — исчезнут и база, и все
+  копии на этой странице. Скопировать файл с этой машины (на внешний диск, в сейф школы)
+  — решение школы; система не принимает его за вас и не может.
+</p>
+<p class="warning">
+  Резервная копия — это <b>данные детей</b> целиком: лица, питание, инциденты, одним
+  файлом. Хранить её можно только там, где разрешено хранить фотографии учеников, и
+  больше нигде. Поэтому скачать копию с этой страницы нельзя — файл забирают с самой
+  машины, и это делает конкретный человек.
+</p>
+
+{% if listing_error %}
+<p class="error">{{ listing_error }}</p>
+{% endif %}
+
+<form method="post" action="/backups" class="filters">
+  {# Without this, any page on the internet could make the school's server write backups
+     -- one per visit, on the disk the recordings go to -- using the browser of an
+     administrator who merely has this dashboard open. `SameSite=lax` does not close it:
+     a form the attacker's page auto-submits is a top-level navigation. #}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="button" {% if running %}disabled{% endif %}>
+    Создать копию сейчас
+  </button>
+</form>
+
+{% if running %}
+{# The copy runs on a background thread: the request that started it answered immediately
+   and did not wait (see web/backup_runner.py, audit H-18). So this page has to say that
+   something is happening, or the operator presses the button again. #}
+<p class="warning">
+  Копирование выполняется{% if started_at %} (начато в {{ started_at }}){% endif %}.
+  Обновите страницу через минуту.
+</p>
+{% endif %}
+
+{% if last %}
+  {% if last.ok %}
+  <p class="meta">Последняя копия, созданная с этой страницы: {{ last.name }}</p>
+  {% else %}
+  {# Escaped like everything else. This text quotes a filesystem path, and the paths on
+     this installation are кириллица, typed by hand on site. #}
+  <p class="error">Последняя попытка не удалась: {{ last.error }}</p>
+  {% endif %}
+{% endif %}
+
+<h2>Копии на этой машине <span class="muted">({{ backups | length }})</span></h2>
+{% if folder %}<p class="meta">Папка: {{ folder }}</p>{% endif %}
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Файл</th>
+      {# "Изменён", not "создан": это время файла на диске (в часовом поясе школы). Имя
+         файла хранит момент, когда копию сняли; если файл переносили, эти два значения
+         разойдутся, и колонка честно показывает второе. #}
+      <th>Изменён</th>
+      <th>Размер</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for backup in backups %}
+    <tr>
+      <td>{{ backup.name }}</td>
+      <td>{{ backup.taken_at }}</td>
+      <td>{{ backup.size }}</td>
+    </tr>
+    {% else %}
+    {# The single most important thing this page can say. A blank table would read as
+       "loading" or as a broken query; this reads as what it is.
+
+       But only when we actually looked. An empty table because the folder could not be
+       read at all (`listing_error`) is not the same fact as an empty table because no
+       backup was ever taken, and saying the second when the first is true is precisely
+       how a value goes true in one layer and false in the next. #}
+    <tr><td colspan="3" class="empty-cell">
+      {% if listing_error %}Список копий недоступен — см. сообщение выше.
+      {% else %}Копий нет: резервное копирование ещё ни разу не запускалось.{% endif %}
+    </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

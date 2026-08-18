@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Состояние камер — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Состояние камер <span class="muted">({{ total }})</span></h1>
+<p class="meta">Снимок на {{ rendered_at }}. Страница не обновляет себя сама — живая стена
+  на <a href="/">главной</a>. Обновите её, чтобы увидеть более поздний момент.</p>
+
+{# The server renders the DOM, and on this page NOTHING re-renders it. There is no script
+   here on purpose: `/` is the live wall, and a row whose status badge refreshed itself
+   every second while the frame rate beside it was five minutes old would be two different
+   instants read as one. Every number below belongs to `rendered_at`.
+
+   The legacy built its grid with innerHTML from server JSON, so a pupil named
+   `<img src=x onerror=...>` was stored XSS in the operator's browser (audit H-05); a
+   camera's display_name arrives from a YAML file by the same road, and is escaped.
+
+   No decisions here either: `signal`, `fps_disagrees` and the rest are computed in
+   web/routes/cameras.py. A template that decides things is a place where a rule gets a
+   second, slightly different implementation. #}
+
+{% if workers_error %}
+<p class="error">workers.yaml не читается: {{ workers_error }}. Ниже не показано, какой
+  процесс ведёт каждую камеру — а камера, которую никто не ведёт, это камера, которую
+  никто не смотрит.</p>
+{% endif %}
+
+<section class="camlist">
+  {% for camera in cameras %}
+  <article class="cam camrow {% if not camera.live %}offline{% endif %}" data-camera="{{ camera.name }}">
+    <div class="frame">
+      {# No `data-src`/`data-role` hooks: those are preview.js's, and preview.js is not on
+         this page. A hook for a script that never runs is markup that lies about what the
+         page does. Through the authenticated handler, never StaticFiles -- these are
+         children. #}
+      <img src="/preview/{{ camera.name }}.jpg" alt="{{ camera.display_name }}" loading="lazy">
+      <span class="badge {{ camera.status }}">{{ camera.status }}</span>
+    </div>
+
+    <div class="camfacts">
+      <h2>{{ camera.display_name }}</h2>
+      <p class="meta">{{ camera.name }} &middot; {{ camera.location }}</p>
+
+      <p class="meta">
+        <span class="tag">{{ camera.role }}</span>
+        {# Four labels because "no preview arrived" has four causes and only one of them
+           is the camera's. They are decided in `_signal`; this only draws them. #}
+        {% if camera.signal == "disabled" %}
+        <span class="tag off">отключена</span>
+        {% elif camera.signal == "live" %}
+        <span class="tag running">кадры идут &middot; {{ camera.age_seconds }} с назад</span>
+        {% elif camera.signal == "worker_down" %}
+        <span class="tag crashed">воркер не работает</span>
+        {% else %}
+        <span class="tag crashed">нет кадров от камеры</span>
+        {% endif %}
+      </p>
+
+      <dl class="camrates">
+        <dt>По конфигу</dt>
+        {# capture.stream_fps: what one camera's own web interface claimed in a screenshot,
+           applied fleet-wide. It is a claim, and it is labelled as one. #}
+        <dd>{{ camera.configured_fps }} кадр/с</dd>
+
+        {# "При запуске", not "сейчас". The loop counts the delivered rate over its first
+           30 frames and then never again -- by design: it is a check on the configuration,
+           not a health metric, and a camera whose rate sags under load is a different
+           problem needing a different signal. Labelling it "измерено" alone would make a
+           number from the worker's first two seconds read as the current rate, which is
+           the same trick `capture.stream_fps` was playing one row above. #}
+        <dt>Измерено при запуске воркера</dt>
+        <dd>
+          {% if camera.measured_fps is none %}
+          не измерено
+          {% else %}
+          {{ camera.measured_fps }} кадр/с
+          {% if camera.fps_disagrees %}
+          <span class="tag crashed" title="Поток идёт не с той скоростью, что записана в capture.stream_fps: все оценки «в секунду» для этой камеры считаются по конфигу, а детектор работает по потоку.">конфиг ≠ поток</span>
+          {% endif %}
+          {% endif %}
+        </dd>
+
+        <dt>Детектору</dt>
+        {# Derived from the CONFIGURED rate, through the one derivation in CaptureSettings --
+           so it is wrong by exactly as much as the configuration is. #}
+        <dd>{{ camera.analysis_fps }} кадр/с <span class="muted">(det_every {{ camera.det_every }})</span>
+          {% if camera.fps_disagrees %}<span class="tag crashed">посчитано по неверному конфигу</span>{% endif %}</dd>
+
+        <dt>Процесс</dt>
+        <dd>
+          {% if camera.group %}
+          {{ camera.group }} &middot; {{ camera.device }}
+          {% if camera.group_state %}<span class="tag {{ camera.group_state }}">{{ camera.group_state }}</span>{% endif %}
+          {% else %}
+          <span class="tag crashed">не назначена ни одной группе</span>
+          {% endif %}
+        </dd>
+      </dl>
+
+      {% if camera.group_error %}
+      {# The GROUP's error, said as the group's. bullying_hall runs two cameras and reports
+         one error for the process, so printing it as this camera's fault invents a fact. #}
+      <p class="meta error">ошибка группы {{ camera.group }}: {{ camera.group_error }}</p>
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <div class="blank">
+    <strong>Камер нет</strong>
+    Список камер читается из <code>config/cameras/</code>. Пока там нет ни одного
+    описания, наблюдать не за чем: страница пуста не из-за сбоя.
+  </div>
+  {% endfor %}
+</section>
+
+{% if pages > 1 %}
+<nav class="pages">
+  {% if page > 1 %}<a href="/cameras?page={{ page - 1 }}">← назад</a>{% endif %}
+  <span class="muted">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a href="/cameras?page={{ page + 1 }}">вперёд →</a>{% endif %}
+</nav>
+{% endif %}
+
+{# No form, and no button that changes anything. Coverage is decided by workers.yaml, never
+   by the UI (R3): the legacy's POST /page-activate/{page} restarted the AI workers when a
+   tab opened, with a five-second thread.join() inside the HTTP handler.
+
+   No `scripts` block either, deliberately -- see the note at the top. #}
+{% endblock %}

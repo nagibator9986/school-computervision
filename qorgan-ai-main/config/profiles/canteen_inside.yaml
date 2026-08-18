@@ -1,0 +1,37 @@
+# Inside the canteen itself.
+#
+# These cameras never open and never close a session. They confirm that a session's
+# pupil is really inside, and they may late-bind an identity to a session that the
+# entry camera opened as Unknown. That is all.
+#
+# Lower priority than the corridors, so: half the frame rate, detection on every
+# second frame. (Legacy shipped exactly this intent as det_every: 2 with a comment
+# about halving GPU load -- and then never read the key.)
+
+# ---------------------------------------------------------------------------
+# ANALYSIS RESOLUTION. Every frame reaching the detector on this camera type is resized
+# to capture.frame_width x frame_height (base.yaml, or the override below) by the one
+# shared qorgan.capture.frames.prepare_frame(). Every px/s and px/s^2 threshold in this
+# file -- and the noise floor they were checked against -- is expressed in pixels of THAT
+# frame. Change the resolution and every one of them is void.
+# ---------------------------------------------------------------------------
+
+camera_type: canteen
+role: canteen_inside
+
+capture:
+  # det_every is the real knob and production honours it: every other frame of the 15 fps
+  # sub-stream, so 7.5 fps of analysis. The `display_fps: 5` that used to sit beside it
+  # made the harness say 2.5 -- wrong in kind, not merely in degree.
+  det_every: 2
+
+rtsp:
+  # No burst: there is no evidence to capture here, only presence.
+  burst_path: null
+
+canteen:
+  inside:
+    recognition_interval_seconds: 1.5
+    recognition:
+      min_score: 0.50
+      min_gap: 0.05

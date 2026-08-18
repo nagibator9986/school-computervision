@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Пользователи <span class="muted">({{ total }})</span></h1>
+
+{# Server-rendered, and no JavaScript builds any of it. The legacy assembled this kind of
+   table with innerHTML from server JSON, so a name like `<img src=x onerror=...>` was
+   stored XSS in the operator's browser (H-05) -- and a username is user-supplied text of
+   exactly that shape. Nothing here is marked |safe, including the error banner: it carries
+   a refusal from the server, and the day one of those quotes something the caller typed,
+   |safe would be the difference between an escaped string and script on this page.
+
+   No business logic either. Every value below was decided in `qorgan.accounts`; a rule
+   living in a template is a rule no test in this suite can see. #}
+
+{% if error %}
+<p class="warning">{{ error }}</p>
+{% endif %}
+
+<section class="new-account">
+  <h2>Новый пользователь</h2>
+  {# POST, so the password travels in the body. In a query string it would be written to
+     the browser's history, to the referrer of every asset the next page loads, and to
+     every proxy log between the school and this server. #}
+  <form method="post" action="/users" class="filters" autocomplete="off">
+    {# Without this the whole page is a gift: `SameSite=lax` still sends the session cookie
+       on a top-level navigation, and a form an attacker's page auto-submits is one. An
+       admin clicking a link in an email would mint the attacker an admin account. #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+      Имя пользователя
+      <input type="text" name="username" value="{{ form_username }}" maxlength="64" required>
+    </label>
+    <label>
+      Пароль
+      {# `value` is deliberately absent, on the refusal path too: putting a rejected
+         password back writes it into the page source. #}
+      <input type="password" name="password" autocomplete="new-password" required>
+    </label>
+    <label>
+      Роль
+      {# This one is inside a <label>, so it is already named and needs no aria-label. The
+         per-row selects further down are not: they sit bare in a table cell. #}
+      <select name="role">
+        {% for role in roles %}
+        <option value="{{ role }}">{{ role }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="confirm">Создать</button>
+  </form>
+</section>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Пользователь</th>
+      <th>Роль</th>
+      <th>Статус</th>
+      <th>Последний вход</th>
+      <th>Создан</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for account in accounts %}
+    <tr class="account">
+      <td>{{ account.username }}</td>
+      <td>
+        <form method="post" action="/users/{{ account.id }}/role" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <select name="role" aria-label="Роль учётной записи {{ account.username }}">
+            {% for role in roles %}
+            <option value="{{ role }}" {% if role == account.role %}selected{% endif %}>
+              {{ role }}
+            </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="link">Сменить</button>
+        </form>
+      </td>
+      <td>
+        {% if account.is_active %}
+        <span class="tag ok">активен</span>
+        {% else %}
+        <span class="tag">отключён</span>
+        {% endif %}
+      </td>
+      <td class="meta">{{ account.last_login }}</td>
+      <td class="meta">{{ account.created }}</td>
+      <td>
+        {# Deactivate, never delete: `Event.reviewed_by_id` is ON DELETE SET NULL, so a
+           removed row would blank the reviewer on every bullying event that person ruled
+           on -- a judgement about a named child, unattributed. #}
+        <form method="post" action="/users/{{ account.id }}/active" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          {% if account.is_active %}
+          <input type="hidden" name="active" value="false">
+          <button type="submit" class="reject">Отключить</button>
+          {% else %}
+          <input type="hidden" name="active" value="true">
+          <button type="submit" class="confirm">Включить</button>
+          {% endif %}
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Пользователей нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if pages > 1 %}
+<nav class="pages">
+  {% if page > 1 %}
+  <a href="/users?page={{ page - 1 }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}
+  <a href="/users?page={{ page + 1 }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

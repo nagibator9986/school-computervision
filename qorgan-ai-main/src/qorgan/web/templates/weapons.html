@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Оружие — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Возможное оружие <span class="muted">({{ total }})</span></h1>
+
+{# §12.1: «Панель обязана показывать, какие веса загружены и на чём они проверены».
+   The block comes FIRST, above the alerts, on purpose: an operator has to be able to see
+   what produced the list before they read it. The previous system ran for months with a
+   0-byte best.pt and no screen anywhere would have said so. #}
+<section class="weights">
+  <h2>Модель, которая это находит</h2>
+
+  {% if weights_error %}
+  <p class="error">Конфигурация не читается: {{ weights_error }}</p>
+  {% elif not weights %}
+  <p class="meta">
+    Ни одной камеры типа <code>weapons</code> в конфигурации нет — модуль обнаружения
+    оружия не работает ни на одной камере. Это не ошибка, а состояние: камера заводится
+    файлом в <code>config/cameras/</code>.
+  </p>
+  {% else %}
+  <div class="table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Камера</th><th>Файл весов</th><th>Размер</th><th>Отпечаток</th>
+        <th>На чём проверено</th><th>Классы</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in weights %}
+      <tr>
+        <td>{{ row.display_name }} <span class="muted">{{ row.camera }}</span></td>
+        <td><code>{{ row.path }}</code></td>
+        <td>{{ row.size }}</td>
+        <td><code>{{ row.fingerprint }}</code></td>
+        <td>
+          {% if row.evaluated_on %}{{ row.evaluated_on }}
+          {% else %}
+          {# Never blank, and never anything that could read as an endorsement. An
+             unevaluated model that admits it is honest. #}
+          <span class="tag">НЕ УКАЗАНО — никто этого не записал</span>
+          {% endif %}
+        </td>
+        <td>{{ row.targets }}</td>
+      </tr>
+      {% if row.problem %}
+      <tr>
+        <td colspan="6" class="rowmsg critical">
+          Веса непригодны: {{ row.problem }} — модуль на этой камере не запустится.
+        </td>
+      </tr>
+      {% endif %}
+      {# **Файл на диске — это не работающий модуль.** Без этой строки три разных состояния
+         рисовались обычной строкой с размером и отпечатком: веса, которые больше порога и
+         НЕ ЗАГРУЖАЮТСЯ (воркер в это время падает по кругу), `enabled: false`, и просто
+         мёртвый воркер. `certain` отделяет «знаем, что не работает» от «отсюда не
+         проверить»: это разные утверждения, и смешать их значит вернуть страницу к
+         намёкам на то, чего она не проверяла. #}
+      {% if row.not_running %}
+      <tr>
+        <td colspan="6" class="{% if row.certain %}rowmsg critical{% else %}rowmsg{% endif %}">
+          {% if row.certain %}Модуль на этой камере сейчас НЕ РАБОТАЕТ: {% else %}
+          Работает ли модуль на этой камере — отсюда не подтверждается: {% endif %}
+          {{ row.not_running }}.
+        </td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td colspan="6" class="meta">
+          Спорные классы на этой камере: {{ row.confusables }}. Это ДОГОВОРЁННОСТЬ об
+          именах, а не проверенный факт: если загруженные веса ни одного из них не выдают,
+          проверка «нож или ручка» не срабатывает никогда и молчит об этом. Сверяет только
+          <code>qorgan weapons weights {{ row.camera }}</code>.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="meta">
+    Здесь показан ФАЙЛ, а не то, что внутри него, и <strong>не то, работает ли
+    модуль</strong>: веб-процесс никогда не загружает модель (правило R3). Строка с размером
+    и отпечатком означает ровно одно — на диске лежит правдоподобный файл. Загрузится ли он,
+    детектор это или классификатор, какие у него классы — отвечает
+    <code>qorgan weapons weights &lt;камера&gt;</code>. Отпечаток — sha256 первого
+    мегабайта: всякий запуск обучения называет свой результат <code>best.pt</code>.
+  </p>
+  {% endif %}
+</section>
+
+{# The honest limit, per camera, on the screen. Client, 2026-07-29: a camera goes at the
+   entrance SPECIFICALLY so the object is large — «но остальные камеры тоже остаются в
+   игре». So this table has one row per camera and deliberately no summary line: a module
+   that reports itself by its best camera is the module that said face recognition worked
+   until somebody measured the corridor (14 970 лиц, медиана 11.5 px, ноль узнаваний). #}
+{% if reach %}
+<section class="reach">
+  <h2>Что каждая камера физически способна увидеть</h2>
+  <div class="table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Камера</th><th>Ширина кадра</th><th>Объектив</th><th>Порог</th>
+        <th>{{ object_cm }} см на {{ reach[0].near_m }} м</th>
+        <th>{{ object_cm }} см на {{ reach[0].far_m }} м</th>
+        <th>Дальше — никогда</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in reach %}
+      <tr>
+        <td>{{ row.display_name }} <span class="muted">{{ row.camera }}</span></td>
+        <td>{{ row.frame_width }} px</td>
+        <td>
+          {{ row.hfov }}
+          {% if not row.hfov_stated %}
+          <span class="tag">ПРЕДПОЛОЖЕНИЕ — никто не сверял с паспортом камеры</span>
+          {% endif %}
+        </td>
+        <td>{{ row.min_pixels }} px</td>
+        <td>{{ row.near_px }} px</td>
+        <td class="{% if not row.reaches_far %}rowmsg critical{% endif %}">
+          {{ row.far_px }} px{% if not row.reaches_far %} — не сработает{% endif %}
+        </td>
+        <td>{{ row.max_distance }} м</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="meta">
+    Одна строка на камеру, и никакой общей оценки: у каждой камеры свой ответ, и камера,
+    которая не видит, не начинает видеть оттого, что рядом стоит другая. Считается объект
+    {{ object_cm }} см (нож в руке) по геометрии объектива на той ширине кадра, которую
+    РЕАЛЬНО анализирует воркер, а не на паспортном разрешении.
+  </p>
+  <p class="meta">
+    «Не сработает» здесь — это не низкая уверенность, а отсутствие пикселей: предмет
+    перестаёт занимать достаточно точек, чтобы иметь форму. <strong>Понижать
+    <code>weapons.min_object_pixels</code> бессмысленно — под порогом ничего нет.</strong>
+    Обратное тоже верно: «сработает» — это необходимое условие, а не обещание. Здесь
+    посчитана только оптика — ни смаз, ни сжатие субпотока, ни то, что лезвие может быть
+    повёрнуто ребром, ни качество самих весов сюда не входят.
+  </p>
+</section>
+{% endif %}
+
+<section class="events">
+  {# Wording is load-bearing on this page. Every alert is a QUESTION until a person
+     answers it (§12.1: тревога никогда не действует автоматически), so nothing here says
+     «обнаружено оружие» — not in a heading, not in a tag, not in the empty state. #}
+  {% for alert in alerts %}
+  <article class="event critical">
+    <div class="evidence">
+      {% if alert.clip %}
+      <video controls preload="none"
+             {% if alert.snapshot %}poster="/media/{{ alert.snapshot }}"{% endif %}>
+        <source src="/media/{{ alert.clip }}" type="video/mp4">
+      </video>
+      {% elif alert.snapshot %}
+      <img src="/media/{{ alert.snapshot }}" alt="{{ alert.summary }}" loading="lazy">
+      {% else %}
+      <div class="no-media">нет медиа</div>
+      {% endif %}
+    </div>
+
+    <div class="details">
+      <h2>{{ alert.summary }}</h2>
+      <p class="meta">
+        {{ alert.occurred_at }} &middot; {{ alert.camera }} &middot;
+        уверенность модели {{ alert.confidence }}
+      </p>
+
+      {% if alert.status == "new" %}
+      <p class="meta"><span class="tag critical">ожидает подтверждения человека</span></p>
+      <div class="review">
+        <form method="post" action="/weapons/{{ alert.id }}/rule">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="verdict" value="confirmed">
+          <button type="submit" class="confirm">Подтверждаю: оружие есть</button>
+        </form>
+        <form method="post" action="/weapons/{{ alert.id }}/rule">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="verdict" value="false_positive">
+          <button type="submit" class="reject">Ложное срабатывание</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="meta">
+        <span class="tag {{ alert.status }}">{{ alert.status }}</span>
+        {# §12.1: «в записи остаётся, кто подтвердил». The name is the record, so it is
+           printed beside the verdict and not tucked into an audit log. #}
+        <span class="tag">решение принял: {{ alert.ruled_by or "неизвестно" }}
+          {% if alert.ruled_at %}&middot; {{ alert.ruled_at }}{% endif %}
+        </span>
+      </p>
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <div class="blank">
+    <strong>Тревог об оружии нет</strong>
+    <span><b>Это НЕ значит «оружия нет».</b> Пустой список значит
+    только, что ни одна камера не задала вопроса — а не задать его она может и потому, что
+    не смотрит. Смотрит ли она, сказано построчно в блоке выше, и зелёная строка там
+    означает лишь «файл на диске правдоподобен»: веса могут не загружаться, камера может
+    быть выключена, воркер может быть мёртв. «Никто не смотрел» и «оружия нет» — разные
+    утверждения, и эта страница никогда не делает второе.</span>
+  </div>
+  {% endfor %}
+</section>
+
+{% if pages > 1 %}
+<nav class="pages">
+  {% if page > 1 %}<a href="/weapons?page={{ page - 1 }}">← назад</a>{% endif %}
+  <span class="muted">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a href="/weapons?page={{ page + 1 }}">вперёд →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

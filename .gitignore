@@ -1,0 +1,47 @@
+# ЧТО НИКОГДА НЕ ПОПАДАЕТ В ЭТОТ РЕПОЗИТОРИЙ, и почему это первый раздел файла.
+#
+# Проект работает с записями школьных кабинетов и фотографиями детей. Push нельзя
+# отозвать: даже удалённый коммит остаётся в истории, в форках и в кэше поисковиков.
+student_photos/
+original_student_photos/
+*_student_photos/
+media/
+data/
+eval/clips/
+eval/crops/
+eval/candidates.csv
+eval/candidates.coverage.csv
+# Кэш детекций и эмбеддинги лиц — это биометрия, посчитанная по реальным записям.
+.cache/
+*.npz
+*.npy
+*.pkl
+
+# Секреты. Только образцы — .env.example и .env.railway.example — под контролем версий.
+.env
+.env.*
+!.env.example
+!.env.railway.example
+
+# Видео и веса моделей: гигабайты, которые GitHub всё равно не примет.
+*.mp4
+*.mov
+*.avi
+*.pt
+*.onnx
+
+# Состояние выполнения.
+logs/
+out/
+*.sqlite3
+*.sqlite3-*
+
+# Окружения и кэши инструментов.
+.venv*/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.DS_Store

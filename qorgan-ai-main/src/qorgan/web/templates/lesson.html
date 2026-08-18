@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Урок {{ report.lesson_id }} — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>{{ report.camera_name }} — {{ report.started_at.strftime('%Y-%m-%d %H:%M') }}</h1>
+
+{# Rendered from `LessonReport.caveat()` and never written out by hand here. One wording,
+   one place: the canteen learned that four hand-copied caveats is four chances for one to
+   quietly stop being true. Unconditional -- the first two sentences hold on every lesson,
+   and their absence on a quiet one is exactly how the claim gets lost. #}
+<p class="warning">
+  {% for line in report.caveat() %}{{ line }} {% endfor %}
+</p>
+
+<section class="tiles">
+  {# Every tile renders ALWAYS, including at zero. A tile hidden at zero is
+     indistinguishable from a value never computed, from a broken query, and from one
+     dropped between the report and this template -- which is not hypothetical: that is
+     precisely how `forced_unknown` went missing from /canteen for several releases. #}
+  <div class="tile">
+    <span class="value">{{ report.present | length }}</span>
+    <span class="label">треков на уроке</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ report.fragments | length }}</span>
+    <span class="label">коротких фрагментов</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ report.unsettled }}</span>
+    <span class="label">без исходного места</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ report.ambiguous_observations }}</span>
+    <span class="label">поз отброшено</span>
+  </div>
+  {# Rendered, not merely computed. `unclaimed` was carried into this template inside
+     `report` and drawn nowhere -- which is the exact shape of the defect that hid
+     `forced_unknown` on /canteen for several releases, because a value dropped on the way
+     to the page and a zero look identical. Mostly this counts the adult at the front of
+     the room, whom the person detector tracks like anybody else; a number far larger than
+     that means tracking is failing and every total above is built on less than it seems. #}
+  <div class="tile">
+    <span class="value">{{ report.unclaimed_observations }}</span>
+    <span class="label">поз вне треков</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ report.dropped_tracks }}</span>
+    <span class="label">треков не взято</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ report.resumed_count }}</span>
+    <span class="label">перезапусков</span>
+  </div>
+</section>
+
+<h2>Треки на уроке ({{ report.present | length }})</h2>
+<p class="meta">
+  Порог присутствия для этого урока: {{ report.min_presence_seconds | round | int }} с.
+  Треки короче показаны отдельной таблицей ниже — они не отброшены.
+</p>
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Трек</th>
+      <th>Наблюдался</th>
+      <th>Кадров</th>
+      <th>Поднял руку</th>
+      <th>Вставал</th>
+      <th>Вне места</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in report.present %}
+    <tr>
+      <td>#{{ row.track_id }}</td>
+      <td>{{ row.observed_seconds | round | int }} с</td>
+      <td>{{ row.observations }}</td>
+      {# `hand_raises` needs no seated baseline, so its zero is a real zero even on a
+         track that never settled. The next two columns do need one -- see below. #}
+      <td>{{ row.hand_raises }}</td>
+      {# «Не измерено», never 0, when no baseline was established. A zero that also means
+         "unknown" is the defect migration 0005 exists about, and rendering it as 0 here
+         would put the two back together at the last possible moment. #}
+      <td>{% if row.measured_place %}{{ row.stands }}{% else %}<span class="meta">не измерено</span>{% endif %}</td>
+      <td>{% if row.measured_place %}{{ row.away_seconds | round | int }} с{% else %}<span class="meta">не измерено</span>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Ни один трек не наблюдался достаточно долго.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Короткие фрагменты ({{ report.fragments | length }})</h2>
+<p class="meta">
+  Треки короче порога присутствия. Обычно это один и тот же ребёнок, которого система
+  теряла и находила заново. Показаны, а не скрыты: если их много, числа выше описывают
+  класс хуже, чем кажется.
+</p>
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr><th>Трек</th><th>Наблюдался</th><th>Кадров</th><th>Поднял руку</th></tr>
+  </thead>
+  <tbody>
+    {% for row in report.fragments %}
+    <tr>
+      <td>#{{ row.track_id }}</td>
+      <td>{{ row.observed_seconds | round | int }} с</td>
+      <td>{{ row.observations }}</td>
+      <td>{{ row.hand_raises }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="empty-cell">Фрагментов нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

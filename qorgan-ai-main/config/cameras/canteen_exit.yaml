@@ -1,0 +1,9 @@
+profile: canteen_exit
+
+name: canteen_exit
+display_name: "Коридор у столовой (выход)"
+location: "Коридор перед столовой / левая сторона"
+priority: 11
+
+rtsp:
+  host: "192.168.1.6"

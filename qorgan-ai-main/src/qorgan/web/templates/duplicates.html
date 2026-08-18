@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Дубликаты — Qorgan AI{% endblock %}
+
+{# One human holding two school ids, six times in this school's data. The decision is made
+   by LOOKING: the band between 0.48 and 0.77 is empty, so these scores are not "similar
+   children" — but 7-А 438/439 may be identical twins, and arithmetic cannot settle that.
+   Nothing on this page decides anything on its own. #}
+
+{% macro side(person, may_see_photos) %}
+<div class="side">
+  {% if may_see_photos and person.photo %}
+  {# Served by the authenticated /media handler, which requires VIEW_PUPIL_PHOTOS and
+     decides from the RESOLVED path. Never StaticFiles: the legacy mounted this tree on a
+     server bound to 0.0.0.0 with no auth anywhere (audit C-01). #}
+  <img src="/media/{{ person.photo }}" alt="{{ person.display }}" loading="lazy">
+  {% elif not may_see_photos %}
+  <div class="no-media">Фотографии скрыты: нет права на фотографии учеников.</div>
+  {% else %}
+  <div class="no-media">Фотографии нет.</div>
+  {% endif %}
+  <p class="meta">
+    <strong>{{ person.external_id }}</strong><br>
+    {{ person.display }}<br>
+    {{ person.class_name or "—" }}
+    &middot; <span class="tag">{{ person.person_type.value }}</span>
+    {% if not person.is_active %}<span class="tag critical">неактивен</span>{% endif %}
+  </p>
+</div>
+{% endmacro %}
+
+{% macro crossing_warning() %}
+{# Same fact as `MergeResult._person_type_warning`, said before the button rather than
+   only after it. Staff never open a meal session, so on such a pair the chosen id decides
+   whether that person is FED — and if it goes the wrong way nothing reports it, because
+   the number that would have said so is the number that stops being produced. #}
+<p class="warning">
+  Пара пересекает границу ученик/сотрудник. Сотрудники не открывают сессию питания:
+  если оставить ID сотрудника человеку, который на самом деле ученик, ребёнок молча
+  исчезнет из журнала столовой, и об этом не сообщит ничто.
+</p>
+{% endmacro %}
+
+{% block content %}
+<h1>Дубликаты <span class="muted">({{ view.outstanding | length }})</span></h1>
+
+{% if error %}
+{# A refusal is a sentence, not a stack trace. `merge_persons` refuses in words, and those
+   words are the whole safety mechanism for an operator who has the direction wrong. #}
+<p class="warning">Отказано: {{ error }}</p>
+{% endif %}
+
+<p class="meta">
+  <a href="/pupils">← к списку</a>
+  &middot; Один человек с двумя ID школы. Система нашла пары; решение принимает школа.
+  Одинаковые близнецы дают такой же счёт — смотрите на фотографии, а не на число.
+</p>
+
+<h2>Нерешённые <span class="muted">({{ view.outstanding | length }})</span></h2>
+
+{% for pair in view.outstanding %}
+{# NOT `.event`: that class is a two-column grid (evidence | body) for events.html, and this
+   article has four children, so the photograph pair was laid into the second track beside
+   the heading instead of under it. `.merge-card` is the same panel chrome without the grid.
+   Both loops render <h3> now — they are the same component, and one of them used to be an
+   <h2> that nothing styled. #}
+<article class="merge-card">
+  <h3>{{ pair.a.external_id }} &harr; {{ pair.b.external_id }}</h3>
+  <p class="meta">Схожесть: <strong>{{ "%.3f"|format(pair.similarity) }}</strong></p>
+
+  {% if pair.crosses_person_type %}{{ crossing_warning() }}{% endif %}
+
+  <div class="pair">
+    {{ side(pair.a, 'view_pupil_photos' in capabilities) }}
+    {{ side(pair.b, 'view_pupil_photos' in capabilities) }}
+  </div>
+
+  {% if 'merge_persons' in capabilities %}
+  {# Both directions offered explicitly, and neither is a default. There is no "resolve
+     all" and nothing here picks a winner: the human names which id survives. #}
+  <div class="review">
+    <form method="post" action="/pupils/duplicates/merge">
+      <input type="hidden" name="keep_id" value="{{ pair.a.person_id }}">
+      <input type="hidden" name="drop_id" value="{{ pair.b.person_id }}">
+      <button type="submit" class="confirm">Оставить {{ pair.a.external_id }}</button>
+    </form>
+    <form method="post" action="/pupils/duplicates/merge">
+      <input type="hidden" name="keep_id" value="{{ pair.b.person_id }}">
+      <input type="hidden" name="drop_id" value="{{ pair.a.person_id }}">
+      <button type="submit" class="confirm">Оставить {{ pair.b.external_id }}</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="meta">Объединять может только администратор школы.</p>
+  {% endif %}
+</article>
+{% else %}
+<div class="blank">
+    <strong>Нерешённых пар нет</strong>
+    Либо сравнение лиц не нашло совпадений выше порога, либо все найденные пары уже
+    разобраны. Проверить заново: <code>qorgan pupils gallery-report</code>.
+  </div>
+{% endfor %}
+
+<h2>Уже объединённые <span class="muted">({{ view.resolved | length }})</span></h2>
+{# Kept in front of the operator for as long as the merge stands, with the consequence
+   attached. A merge across the pupil/staff line was a ONE-WAY DOOR until --reactivate
+   existed: the summary said "merge back the other way", and merging back was refused
+   because the id you would merge into is the one the merge had just retired. #}
+
+{% for merge in view.resolved %}
+<article class="merge-card">
+  <h3>{{ merge.dropped.external_id }} → {{ merge.kept.external_id }}</h3>
+
+  {% if merge.crosses_person_type %}{{ crossing_warning() }}{% endif %}
+
+  <div class="pair">
+    {{ side(merge.kept, 'view_pupil_photos' in capabilities) }}
+    {{ side(merge.dropped, 'view_pupil_photos' in capabilities) }}
+  </div>
+
+  {% if 'merge_persons' in capabilities %}
+  <div class="review">
+    <form method="post" action="/pupils/duplicates/undo">
+      {# Reversed: the id that was retired becomes the one that is kept. #}
+      <input type="hidden" name="keep_id" value="{{ merge.dropped.person_id }}">
+      <input type="hidden" name="drop_id" value="{{ merge.kept.person_id }}">
+      <button type="submit" class="reject">
+        Отменить: вернуть {{ merge.dropped.external_id }}
+      </button>
+    </form>
+  </div>
+  <p class="meta">
+    Это не разъединение. Отмена объединяет в обратную сторону: всё переходит на
+    {{ merge.dropped.external_id }}, а {{ merge.kept.external_id }} становится неактивным
+    — включая записи, которые принадлежали ему до объединения.
+  </p>
+  {% endif %}
+</article>
+{% else %}
+<div class="blank">
+  <strong>Объединений не было</strong>
+  Ни одна пара ещё не сведена в одну запись. Объединение делает человек — этой страницей
+  или командой <code>qorgan pupils merge &lt;оставить&gt; &lt;удалить&gt;</code>.
+</div>
+{% endfor %}
+{% endblock %}

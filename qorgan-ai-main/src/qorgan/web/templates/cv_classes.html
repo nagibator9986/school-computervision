@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Классы — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Классы <span class="muted">под наблюдением</span></h1>
+
+{# The entry point of the whole cabinet. It opens on CLASSES because that is the unit a
+   psychologist holds in their head: «8-А, у которого подписан план рассадки» comes before
+   «место 7». The previous entry point was a flat list of recordings, which made the first
+   step of every walk a guess about which chair a child sat in. #}
+<p class="cv-lede">
+  Единица учёта — <b>место в классе, а не ребёнок</b>. Имя появляется только там, где школа
+  письменно подтвердила план рассадки; до этого страница называет место местом. Ниже —
+  классы, по которым есть разобранные записи.
+</p>
+
+{% if not rows %}
+<div class="blank">
+  <strong>Разобранных записей пока нет</strong>
+  Разбор делается заранее и отдельно от панели, а результат загружается командой
+  <code>qorgan classvision import</code>.
+</div>
+{% else %}
+<div class="tiles">
+  <div class="tile ok">
+    <span class="value">{{ rows | length }}</span>
+    <span class="label">классов под наблюдением</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ rows | sum(attribute='lessons') }}</span>
+    <span class="label">уроков разобрано</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ rows | sum(attribute='pupil_places') }}</span>
+    <span class="label">ученических мест</span>
+  </div>
+  <div class="tile {{ 'ok' if rows | sum(attribute='attested_places') else 'alert' }}">
+    <span class="value">{{ rows | sum(attribute='attested_places') }}</span>
+    <span class="label">мест с подписанным планом рассадки</span>
+  </div>
+</div>
+
+<div class="card-grid">
+  {% for row in rows %}
+  <a class="class-card{{ ' signed' if row.attested_places else '' }}"
+     href="/psychologist/classes/{{ row.class_key | urlencode }}">
+    <span class="class-card-key">{{ row.class_key }}</span>
+    <span class="class-card-rooms">
+      {% for room in row.rooms %}<span class="tag">{{ room }}</span>{% endfor %}
+    </span>
+    <dl class="class-card-facts">
+      <dt>уроков</dt><dd>{{ row.lessons }}</dd>
+      <dt>период</dt><dd>{{ row.first_day }} — {{ row.last_day }}</dd>
+      <dt>ученических мест</dt><dd>{{ row.pupil_places }}</dd>
+      <dt>видимость, медиана</dt>
+      <dd>{% if row.coverage_median is none %}<span class="cv-unmeasured">не измерялось</span>
+          {% else %}{{ row.coverage_median }}%{% endif %}</dd>
+    </dl>
+    {# The seating plan is the whole difference between a page about chairs and a page about
+       children, so it is the last line of every card and it is a word, not a colour. #}
+    {% if row.fully_attested %}
+    <span class="class-card-plan ok">план рассадки подписан — {{ row.attested_places }} из {{ row.pupil_places }}</span>
+    {% elif row.attested_places %}
+    <span class="class-card-plan part">подписано {{ row.attested_places }} из {{ row.pupil_places }} мест</span>
+    {% else %}
+    <span class="class-card-plan none">плана рассадки нет — учёт по местам</span>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

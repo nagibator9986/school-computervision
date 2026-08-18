@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Логи — Qorgan AI{% endblock %}
+
+{# Server-rendered, and every value below is escaped by Jinja's autoescape. There is not
+   one `|safe` on this page and there must never be: a log line quotes exception strings,
+   file paths and camera names, which makes it the most attacker-influenced text in the
+   system. The legacy built this DOM with innerHTML from server JSON, so a pupil named
+   `<img src=x onerror=...>` was stored XSS in the operator's browser (audit H-05).
+
+   No logic here either -- every value arrives decided. The template picks no thresholds,
+   parses no timestamps and categorises nothing. #}
+
+{% block content %}
+<h1>Логи <span class="muted">— диагностика</span></h1>
+
+{# ---- перезапуски -------------------------------------------------------- #}
+<h2>Воркеры и перезапуски</h2>
+<p class="meta">
+  Из таблицы <code>worker_heartbeats</code>: одна строка на группу воркеров, счётчик
+  перезапусков ведёт супервизор. Строк ровно столько, сколько групп в конфигурации —
+  поэтому здесь нет страниц.
+</p>
+<div class="table-scroll">
+<table class="workers">
+  <thead>
+    <tr>
+      <th>Группа</th><th>Состояние</th><th>PID</th>
+      <th>Перезапусков</th><th>Последний сигнал</th><th>Последняя ошибка</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for worker in workers %}
+    <tr>
+      <td>{{ worker.group }}</td>
+      <td><span class="tag {{ worker.state }}">{{ worker.state }}</span></td>
+      <td>{{ worker.pid or "—" }}</td>
+      <td>{{ worker.restarts }}</td>
+      <td>{% if worker.seconds_since_beat is not none %}{{ worker.seconds_since_beat }} с назад{% else %}—{% endif %}</td>
+      <td class="wrap">{{ worker.last_error or "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Ни один воркер не отчитался. Запущен ли супервизор?</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{# ---- причины пропуска тревог -------------------------------------------- #}
+<h2>Недоставленные тревоги <span class="muted">({{ undelivered.total }})</span></h2>
+
+{% if not telegram_configured %}
+<p class="error">
+  Telegram не настроен (нет токена или chat id): тревоги записываются в очередь, но не
+  отправляются. Это и есть причина, по которой ни одна из них не уходит.
+</p>
+{% endif %}
+
+<p class="meta">
+  Из таблицы <code>notifications</code>: тревоги, поставленные в очередь и не дошедшие.
+  Событие, для которого уведомление вообще не ставилось в очередь, здесь не показано —
+  это решение нигде не записано как строка таблицы, и вычислять его задним числом значило
+  бы гадать. Оно есть в журнале ниже: воркер пишет его вместе с событием (поле
+  <code>notify</code>).
+</p>
+
+<div class="table-scroll">
+<table class="workers">
+  <thead>
+    <tr>
+      <th>Событие</th><th>Время</th><th>Камера</th>
+      <th>Статус</th><th>Попыток</th><th>Ошибка</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for alert in undelivered.alerts %}
+    <tr>
+      <td>#{{ alert.event_id }}</td>
+      <td>{{ alert.occurred_at }}</td>
+      <td>{{ alert.camera }}</td>
+      <td><span class="tag {{ alert.status }}">{{ alert.status }}</span></td>
+      <td>{{ alert.attempts }}</td>
+      <td class="wrap">{{ alert.last_error or "—" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty-cell">Все поставленные в очередь тревоги доставлены.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{# Both page numbers travel in every link. Dropping the other one would silently reset the
+   other panel to page 1 while its "3 / 5" still said otherwise. #}
+{% if undelivered.pages > 1 %}
+<nav class="pages">
+  {% if undelivered.page > 1 %}
+  <a href="/logs?page={{ journal.page }}&amp;alerts_page={{ undelivered.page - 1 }}&amp;category={{ category }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ undelivered.page }} / {{ undelivered.pages }}</span>
+  {% if undelivered.page < undelivered.pages %}
+  <a href="/logs?page={{ journal.page }}&amp;alerts_page={{ undelivered.page + 1 }}&amp;category={{ category }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+{# ---- журнал ------------------------------------------------------------- #}
+{# The count carries its qualifier rather than sitting beside one: this is how many
+   records matched IN THE TAIL THAT WAS READ, and a bare number over a log view is read as
+   "how many errors there have been". #}
+<h2>Журнал <span class="muted">({{ journal.total }} в прочитанном хвосте)</span></h2>
+
+{% if journal.unavailable %}
+{# A warning, not an error, and not an empty table: the category has no source RIGHT NOW
+   and the page says which setting changes that. Showing plausible rows here instead is
+   this project's cardinal sin. #}
+<p class="warning">{{ journal.unavailable }}</p>
+{% else %}
+
+<form method="get" action="/logs" class="filters">
+  <label>
+    Категория
+    <select name="category" onchange="this.form.submit()">
+      <option value="">все</option>
+      {% for code, label in categories %}
+      <option value="{{ code }}" {% if code == category %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<p class="meta">
+  Уровень WARNING и выше, из файлов журнала: {{ journal.files | join(", ") or "нет файлов" }}.
+  Прочитан последний хвост каждого файла (до {{ journal.horizon_kb }} КБ) — более старые
+  записи остались в ротированных файлах на диске и здесь не искались.
+  {% if journal.unreadable %}
+  Строк, которые не удалось разобрать: {{ journal.unreadable }}.
+  {% endif %}
+</p>
+
+<div class="table-scroll">
+<table class="workers journal">
+  <thead>
+    <tr><th>Время</th><th>Уровень</th><th>Категория</th><th>Источник</th><th>Запись</th></tr>
+  </thead>
+  <tbody>
+    {% for entry in journal.entries %}
+    <tr>
+      <td class="nowrap">{{ entry.ts }}</td>
+      <td><span class="tag {{ entry.level | lower }}">{{ entry.level }}</span></td>
+      <td>{{ entry.category }}</td>
+      <td class="wrap">{{ entry.logger }}</td>
+      <td class="wrap">
+        {{ entry.message }}
+        {% if entry.fields %}
+        <span class="fields">
+          {% for key, value in entry.fields %}<span class="tag">{{ key }}={{ value }}</span>{% endfor %}
+        </span>
+        {% endif %}
+        {% if entry.traceback %}
+        <details><summary class="muted">трассировка</summary><pre>{{ entry.traceback }}</pre></details>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="empty-cell">Ошибок в прочитанном хвосте журнала нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if journal.pages > 1 %}
+<nav class="pages">
+  {% if journal.page > 1 %}
+  <a href="/logs?page={{ journal.page - 1 }}&amp;alerts_page={{ undelivered.page }}&amp;category={{ category }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ journal.page }} / {{ journal.pages }}</span>
+  {% if journal.page < journal.pages %}
+  <a href="/logs?page={{ journal.page + 1 }}&amp;alerts_page={{ undelivered.page }}&amp;category={{ category }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+{% endif %}
+{% endblock %}

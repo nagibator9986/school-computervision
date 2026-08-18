@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% import "cv_macros.html" as cv %}
+{% block title %}Разбор уроков — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Разбор уроков <span class="muted">— наблюдение за местами в классе</span></h1>
+
+<p class="cv-lede">Единица учёта — <b>место в классе, а не ребёнок</b>. Система не ставит
+  диагнозов, не даёт рекомендаций и никого не сравнивает между собой: ниже счётчики
+  наблюдаемых фактов, и интерпретирует их человек. Каждое число показано вместе с тем, какую
+  долю урока это место было видно.</p>
+
+{# ONE table now, on the operator's instruction — the second one existed only to hold the rows
+   this page used to label as a demonstration. The heading changed with it, and that was not
+   cosmetic: «Измеренные» is a claim about every row underneath it, and with the two tables
+   merged it would have been making that claim on the operator's behalf about rows the page no
+   longer separates. «Разобрано» is what the tile beneath already counts, it is true of every
+   row, and it asserts nothing the page cannot show. `is_demo` is still on every row in the
+   database (`lessons_index.LessonRow.is_demo`) — this hides the label, it does not lose it. #}
+<h2>Разобранные уроки</h2>
+<div class="tiles">
+  <div class="tile ok">
+    <span class="value">{{ index.totals.lessons }}</span>
+    <span class="label">уроков разобрано</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ index.totals.places }}</span>
+    <span class="label">ученических мест под наблюдением</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ index.totals.place_minutes }}</span>
+    <span class="label">место-минут наблюдения</span>
+  </div>
+  <div class="tile">
+    <span class="value">
+      {%- if index.totals.coverage_median is none -%}—
+      {%- else -%}{{ index.totals.coverage_median | round(0) | int }}%{%- endif -%}
+    </span>
+    <span class="label">видимость места, медиана по урокам</span>
+  </div>
+  <div class="tile">
+    <span class="value">{{ index.attested_places }}</span>
+    <span class="label">мест с подписанным планом рассадки</span>
+  </div>
+</div>
+
+{% if index.attested_places == 0 %}
+<p class="cv-note">Подписанных мест — ни одного, и это ожидаемое состояние. Пока их нет, каждое
+  место называется «место N», а не именем: ни лицо, ни трекер имени здесь не создают.
+  Распознавание лица на этих камерах измерено — лучшее совпадение 0,30 при отрыве 0,10, — и
+  такого утверждения не выдерживает.</p>
+{% endif %}
+{% if index.undated %}
+<p class="warning">Записей без прочитанной даты: {{ index.undated }}. Такая запись не попадает
+  ни в одну недельную сводку — это отсутствие наблюдения, а не ноль.</p>
+{% endif %}
+
+{{ cv.lesson_table(index.lessons, 'Уроков пока нет.') }}
+{% endblock %}

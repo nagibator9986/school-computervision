@@ -1,0 +1,64 @@
+# Canteen entry corridor. The ONLY camera that may open a meal session.
+#
+# Legacy called this cam_bullying_6.yaml and shipped it with a full bullying scoring
+# block -- about 25 keys no code path ever read for this camera. The schema now makes
+# that combination impossible to express.
+
+# ---------------------------------------------------------------------------
+# ANALYSIS RESOLUTION. Every frame reaching the detector on this camera type is resized
+# to capture.frame_width x frame_height (base.yaml, or the override below) by the one
+# shared qorgan.capture.frames.prepare_frame(). Every px/s and px/s^2 threshold in this
+# file -- and the noise floor they were checked against -- is expressed in pixels of THAT
+# frame. Change the resolution and every one of them is void.
+# ---------------------------------------------------------------------------
+
+camera_type: canteen
+role: canteen_entry
+
+capture:
+  frame_width: 1280
+  frame_height: 720
+  # No stream_fps override -- see base.yaml. The sub-stream rate belongs to the NVR.
+
+yolo:
+  conf: 0.24
+
+canteen:
+  entry:
+    # These two bound the UNKNOWN meal sessions -- the ones with no person_id, which the
+    # session machine cannot dedup because there is nothing to dedup them BY. A person box
+    # smaller than this is a figure at the far end of the room, not a child at the door; and
+    # the same child re-appearing under a NEW track id within the cooldown, in the same
+    # doorway, is one child and not two. (A long occlusion at a busy door is what makes
+    # ByteTrack issue that new id, and each id would otherwise open its own meal session.)
+    #
+    # It is NOT a global cooldown: a second child queuing behind the first keeps their own
+    # session however soon they step forward. See qorgan/canteen/unknowns.py, which states
+    # the rule and its failure mode.
+    #
+    # `face_roi` used to sit here. No code ever read it, so it is gone.
+    min_person_box_area: 3200
+    person_cooldown_seconds: 5.0
+
+    recognition:
+      min_score: 0.50
+      min_gap: 0.05
+      # `face_gate` used to sit here, at 52x70. Nothing read it: `faces.matching.match`
+      # gates on score and gap only, so the strict path has never had a size gate and
+      # this said otherwise. Gone, with the rest of the config no code consulted.
+
+    # The small-face path. Younger pupils' faces are systematically small, and a strict
+    # single-shot threshold simply never recognises the first-graders. So: accept a
+    # lower score if the SAME person comes top-1 twice inside a short window. Its
+    # `face_gate` below IS read (identity/service.py::_soften). Domain knowledge, not a
+    # hack. Keep it.
+    small_face:
+      enabled: true
+      min_score: 0.50
+      min_gap: 0.12
+      min_hits: 2
+      window_seconds: 6.0
+      face_gate:
+        min_width: 38
+        min_height: 48
+        min_area: 1824

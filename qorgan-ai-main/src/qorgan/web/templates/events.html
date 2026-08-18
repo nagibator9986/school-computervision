@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}События — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>События <span class="muted">({{ total }})</span></h1>
+
+{# Server-rendered. The legacy built this table with innerHTML from server JSON, so a
+   pupil named `<img src=x onerror=...>` gave stored XSS in the operator's browser. #}
+<form method="get" action="/events" class="filters">
+  <label>
+    Статус
+    <select name="status_filter" onchange="this.form.submit()">
+      <option value="">все</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {% if s == status_filter %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+      {# NOT one of the statuses, and here anyway. A referral is not a verdict on the
+         detector, so it is not an `EventStatus` member -- it selects on
+         `referred_at IS NOT NULL`. It belongs in this box because «покажи только эти» is
+         one question to the reader, not because it is the same kind of value. #}
+      <option value="{{ referred_filter }}" {% if referred_filter == status_filter %}selected{% endif %}>
+        передано психологу
+      </option>
+    </select>
+  </label>
+  {# The filter used to be applied ONLY by `onchange`, so with scripting off the control was
+     inert, and a keyboard user stepping through the options with the arrow keys fired one
+     navigation per keystroke. The button is what actually submits; the `onchange` stays as
+     the convenience it was always meant to be. #}
+  <button type="submit" class="confirm">Показать</button>
+</form>
+
+<section class="events">
+  {% for event in events %}
+  <article class="event {{ event.severity }}">
+    <div class="evidence">
+      {% if event.clip %}
+      {# A <video>, not a link. The legacy's clips were unplayable in the UI. #}
+      <video controls preload="none"
+             {% if event.snapshot %}poster="/media/{{ event.snapshot }}"{% endif %}>
+        <source src="/media/{{ event.clip }}" type="video/mp4">
+      </video>
+      {% elif event.snapshot %}
+      <img src="/media/{{ event.snapshot }}" alt="{{ event.summary }}" loading="lazy">
+      {% else %}
+      <div class="no-media">нет медиа</div>
+      {% endif %}
+    </div>
+
+    <div class="details">
+      <h2>{{ event.summary }}</h2>
+      <p class="meta">
+        {{ event.occurred_at }} &middot; {{ event.camera }} &middot;
+        уверенность {{ event.confidence }}
+      </p>
+      <p class="meta">
+        <span class="tag {{ event.severity }}">{{ event.severity }}</span>
+        <span class="tag {{ event.status }}">{{ event.status }}</span>
+        {% if event.skeleton_confirmed %}
+        <span class="tag ok" title="Скелет подтвердил агрессию">скелет ✓</span>
+        {% else %}
+        <span class="tag" title="Без подтверждения скелета уведомление не отправляется">
+          скелет ✗
+        </span>
+        {% endif %}
+      </p>
+
+      {# The recorded answer to "почему мне не пришло уведомление?", not a guess made
+         here from the confidence and the current thresholds. Printed only when there is
+         one: an empty column means the alert was raised OR that the event predates the
+         column, and the template must not turn that ambiguity into a claim. #}
+      {% if event.telegram_skip_reason %}
+      <p class="meta">
+        <span class="tag" title="Событие записано, но уведомление в Telegram не отправлялось">
+          Telegram не отправлен: {{ event.telegram_skip_reason }}
+        </span>
+      </p>
+      {% endif %}
+
+      {# The handover, drawn off `referred_at` and NOT off the status: an operator who
+         referred this and afterwards confirmed it as bullying has not un-referred the
+         child, and the row must keep saying who did it and when. #}
+      {% if event.referred_at %}
+      <p class="meta">
+        <span class="tag" title="Передано человеком, не системой">
+          Передано психологу: {{ event.referred_by }}, {{ event.referred_at }}
+        </span>
+      </p>
+      {% endif %}
+
+      {# Drawn for an event nobody has ruled on yet -- and REFERRING ONE DOES NOT COUNT AS
+         RULING ON IT. Until 2026-07-29 `refer()` wrote «передано психологу» into `status`,
+         so pressing the button below turned this condition false and these two controls
+         disappeared for good: the operator could no longer tell us the detector had been
+         wrong, and «This is the only channel through which the school tells us we were
+         wrong» (web/routes/events.py). The referral now lives in its own column and this
+         condition never sees it. #}
+      {% if event.status == "new" %}
+      <div class="review">
+        <form method="post" action="/events/{{ event.id }}/review">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="verdict" value="confirmed">
+          <button type="submit" class="confirm">Подтвердить</button>
+        </form>
+        <form method="post" action="/events/{{ event.id }}/review">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="verdict" value="false_positive">
+          <button type="submit" class="reject">Ложное срабатывание</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {# §9's «передано психологу». Deliberately OUTSIDE the `status == "new"` block: a
+         confirmed incident is exactly the one somebody is most likely to hand on, and
+         tying the button to the unreviewed state would have made the mark unreachable for
+         every event that had already been ruled on.
+
+         Drawn from the capability the route is gated on, so nobody is offered a 403. Not
+         shown once it has been referred: pressing it again changes nothing (`refer` keeps
+         the first handover's name and minute), and a button that does nothing teaches
+         people the page is broken. #}
+      {% if 'refer_to_psychologist' in capabilities and not event.referred_at %}
+      <div class="review">
+        <form method="post" action="/events/{{ event.id }}/refer">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit">Передать психологу</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <div class="blank">
+    <strong>Событий нет</strong>
+    Это значит, что ни одна камера не задала вопроса. Не задать его она может и потому,
+    что не смотрит: состояние камер — на странице «Состояние камер».
+  </div>
+  {% endfor %}
+</section>
+
+{% if pages > 1 %}
+<nav class="pages">
+  {% if page > 1 %}
+  <a href="/events?page={{ page - 1 }}&status_filter={{ status_filter }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}
+  <a href="/events?page={{ page + 1 }}&status_filter={{ status_filter }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

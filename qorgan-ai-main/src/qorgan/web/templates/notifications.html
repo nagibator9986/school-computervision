@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Уведомления — Qorgan AI{% endblock %}
+
+{% block content %}
+<h1>Уведомления <span class="muted">({{ total }})</span></h1>
+
+{# Server-rendered, every cell escaped by Jinja. No `|safe` anywhere on this page: the
+   error column is text Telegram sent us, and the summary column can carry a pupil's name.
+   The legacy built this table with innerHTML from server JSON, which made both of those
+   stored XSS in the operator's browser (audit H-05). #}
+
+{# The count in the heading follows the filter; this one never does, so it says so. Two
+   numbers on one page with different scopes, neither saying which is which, is how a
+   reader ends up believing something untrue without anybody having written it. #}
+{% if undelivered %}
+<p class="warning">
+  <a href="/notifications?status_filter=failed">Не доставлено за всё время: {{ undelivered }}</a>.
+  Каждое из них — сигнал о происшествии, который не дошёл ни до кого.
+</p>
+{% endif %}
+
+<form method="get" action="/notifications" class="filters">
+  <label>
+    Статус
+    <select name="status_filter" onchange="this.form.submit()">
+      <option value="">все</option>
+      {% for value, label in statuses %}
+      <option value="{{ value }}" {% if value == status_filter %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<div class="table-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>№</th>
+      <th>Событие</th>
+      <th>Время события</th>
+      <th>Камера</th>
+      <th>Канал</th>
+      <th>Статус</th>
+      <th>Попыток</th>
+      <th>Доставлено</th>
+      <th>Ошибка</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in notifications %}
+    <tr class="notification {{ row.status }}">
+      <td>{{ row.id }}</td>
+      <td>№{{ row.event_id }} &middot; {{ row.summary }}</td>
+      <td>{{ row.occurred_at }}</td>
+      <td>{{ row.camera }}</td>
+      <td>{{ row.channel }}</td>
+      <td><span class="tag {{ row.status }}">{{ row.status_label }}</span></td>
+      <td>{{ row.attempts }}</td>
+      <td>{{ row.sent_at }}</td>
+      <td class="error">{{ row.error }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="empty-cell">Уведомлений нет.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if pages > 1 %}
+<nav class="pages">
+  {% if page > 1 %}
+  <a href="/notifications?page={{ page - 1 }}&status_filter={{ status_filter }}">← назад</a>
+  {% endif %}
+  <span class="muted">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}
+  <a href="/notifications?page={{ page + 1 }}&status_filter={{ status_filter }}">вперёд →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

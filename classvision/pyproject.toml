@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "classvision"
+# 1.1.0: artefact schema classvision/1.1 -- the ambiguous per-state `seconds` split, the
+# adult's shares gained their denominator, and the LLM path was inverted so the model emits
+# no numerals. See MEASUREMENTS.md section 8.
+version = "1.1.0"
+description = "Offline classroom video analysis: observable facts per seat, for a school psychologist"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+
+# The base install runs the PURE half: reading an artefact, computing metrics, rendering
+# the report and the Russian summary. It deliberately pulls in no model stack, because the
+# machine that reads a report is not the machine that produces one -- and because the web
+# project that will import these artefacts must never inherit torch. See INTEGRATION.md §1.
+dependencies = [
+    "numpy>=1.26",
+    "scikit-learn>=1.4",   # DBSCAN for seat discovery
+    "matplotlib>=3.8",     # report charts
+]
+
+[project.optional-dependencies]
+# The analysis half. Only needed on the machine that actually processes video.
+#
+# LICENSING, and it is not a footnote (INTEGRATION.md §9): `ultralytics` is AGPL-3.0, so a
+# network-served derivative work triggers source disclosure. Keeping it in this extra --
+# and out of the base install -- is what keeps a school's web application clear of that
+# obligation. `insightface`'s buffalo_l weights are non-commercial, which is why face
+# corroboration is off by default and lives in its own extra again.
+analyse = [
+    "opencv-python>=4.9",
+    "torch>=2.2",
+    "ultralytics>=8.3",
+]
+faces = [
+    "insightface>=0.7",
+    "onnxruntime>=1.17",
+]
+llm = [
+    # The Russian summary has a complete deterministic generator and needs neither of
+    # these. They are for the optional LLM path only, which ADDS a short orientation note
+    # on top of the deterministic text and never replaces it.
+    #
+    # The floor is the version the call shape was actually VERIFIED against (2026-08-13,
+    # model `gemini-3.6-flash`), not the oldest release that might work. `google-genai`
+    # changed its client surface substantially between 0.x and 2.x, and a floor of 0.3
+    # would let pip resolve an SDK this code has never been run on.
+    "google-genai>=2.18",
+    "openai>=1.40",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+classvision = "classvision.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/classvision"]
+
+[tool.hatch.build]
+# The DVR clock font is data the package cannot work without.
+artifacts = ["src/classvision/assets/*.npz"]
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",    # long lines are in docstrings that explain measurements; wrapping hurts them
+    "RUF001",  # Cyrillic in user-facing strings is the point
+    "RUF002",
+    "RUF003",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,178 @@
+video_id,t_start,t_end,label,camera
+# ---------------------------------------------------------------------------------------
+# The `camera` column: an explicit value here WINS over inference from the filename. It
+# exists because a human can state a truth a parser cannot infer. An empty cell means
+# "infer"; a clip that can be neither inferred nor stated is a hard error, never a guess.
+#
+# Both cameras in ROWS 1-2 were MEASURED, not guessed: each clip's background was matched
+# against a median background built from known clips of each camera. Control: 8 held-out
+# clips of KNOWN cameras, 8/8 correct, margins +0.54 to +0.81. Evidence in eval/README.md.
+#
+# ROW 1 -- "нет буллинга" ("no bullying"). The human who named it told us what is in it, so
+# the whole 9.88s is `normal`. That is a real label, not a placeholder.
+#
+# ROW 2 -- a shove in the 663-clip recorder corpus ("резко начинают толкаться"). We know it
+# contains one; we do NOT know WHEN, and nothing here guesses a timestamp. So the whole 17.6s is
+# `pending`: no human has judged the moment yet. `pending` is NOT `ignore` -- `ignore` is a
+# settled judgement ("neither fight nor false alarm"), and using it here made the fight
+# contribute no TP and no FN, so recall read 0/0 and looked clean.
+#
+# A third human-named clip and five stairs_floor2_second clips could NOT be attributed to a
+# camera and are quarantined in eval/unresolved/. They are in docs/questions-for-school.md.
+#
+# =======================================================================================
+# ROWS 3+ -- the school's own labelling spreadsheet (Разметка_буллинг.xlsx, 48 rows,
+# received 2026-07-20). 47 of its 48 rows are below; the 48th is unusable (see BROKEN
+# TIMESTAMP). The spreadsheet is gitignored (*.xlsx: it is the school's own file). Every
+# row's original Тип and Комментарий are preserved verbatim in eval/school_labels_2026-07.csv
+# -- that sidecar, not this file, is where the school's reasoning lives. Do not add columns
+# here: `append_label` refuses any header that is not exactly these five, so a sixth column
+# would break `qorgan eval label`, which is the tool the PENDING rows below still need.
+#
+# CAMERA. The sheet identifies cameras by IP. The mapping was read out of config/cameras/
+# (each file's rtsp.host), never guessed:
+#     192.168.1.2 -> hall_right     192.168.1.4  -> hall_left
+#     192.168.1.3 -> yard_entry     192.168.1.10 -> stairs_floor2
+#     192.168.1.64 -> stairs_floor1 192.168.1.11 -> stairs_floor2_aux
+# All six IPs in the sheet resolve to a configured bullying camera; none is unmapped. Every
+# clip here is human-named, so `parse_clip_name` cannot place any of them -- the `camera`
+# column is doing the work on all 47 rows, which is exactly what it exists for.
+#
+# THE TYPE MAPPING. The school used ten types; we have four kinds. What each became, and why:
+#
+#   normal  <- Норма, Обычная ходьба, Бег, Игра, Скопление детей, Группа учеников,
+#              Дружеский физический контакт.  Each comment states there is no aggression.
+#
+#   ignore  <- Толчок (push), Попытка удара ногой (kick attempt).  TWO rows, 1.15s total.
+#              The human ruled BOTH out as bullying in writing -- "а не буллинг" -- so
+#              neither is a positive. They are `ignore` rather than `normal` because the
+#              same comments also say the human was not confident WHAT they were:
+#              "Спорный случай между игрой и агрессией" (kick) and "момент толчка виден
+#              лишь частично" (push -- they could not fully see it). `ignore` is for "a
+#              stretch nobody is confident about"; it absorbs a firing instead of counting
+#              it as a false positive. THIS IS A JUDGEMENT CALL AND IT IS REVERSIBLE: read
+#              as `normal` instead, a firing in these 1.15s would count against precision.
+#              At 1.15s of 391s the numbers barely move either way -- flagged so it can be
+#              overruled cheaply, not buried.
+#
+#   pending <- Подозрение на буллинг (SUSPICION of bullying). See below -- this was TWO
+#              rows and is now ONE.
+#
+#   bullying <- TWO rows, both added 2026-07-23 (bad492d). See below.
+#
+# ---------------------------------------------------------------------------------------
+# UPDATED 2026-07-24. THE PARAGRAPHS BELOW USED TO SAY `bullying <- NOTHING` AND "THE TWO
+# PENDING ROWS", AND THE DATA ROWS HAVE CONTRADICTED THEM SINCE bad492d.
+#
+# The header was not touched when the labels changed, so this file asserted in prose the
+# opposite of what it carried in data -- a value true in one layer and silently false in
+# the next, which is the exact defect this project exists to remove. Anyone reading the
+# header would have concluded the corpus has no positive and that recall cannot exist.
+# It does. Count what is below the header, never this block, and if you change a label,
+# change this block in the same commit.
+#
+# Current counts, taken from the data rows on 2026-07-24:
+#     normal 44   ignore 2   bullying 2   pending 1     (49 data rows)
+# ---------------------------------------------------------------------------------------
+#
+# THE TWO BULLYING ROWS, AND WHO DECIDED THEM.
+# The only candidate positives in the whole delivery were two "Подозрение на буллинг" rows:
+# a child gripped by the head and walked to the mirrored column. The hedge was in the type
+# name -- SUSPICION -- and both of the school's comments refused to settle it:
+#   1.2 / hall_right, 6.5-13.5s: "спорно между грубой игрой и издевательством --
+#                                 окончательно тип не очевиден из-за дистанции съёмки"
+#   1.4 / hall_left,  5.5-16.0s: "окончательно между грубой игрой и издевательством
+#                                 не разграничить"
+# BOTH ARE NOW `bullying`. The call was made by THE OWNER, not by the school and not by
+# any measurement: a girl seizing a boy's head and walking him, bent, across the hall
+# under physical control is bullying, not play (commit bad492d, 2026-07-23). The two
+# intervals are 7.0s and 10.5s of continuous hold -- the duration is why it is not a
+# grab-and-release. This overrules the only human who watched the footage, deliberately
+# and on the record, and EVERY RECALL NUMBER THIS PROJECT EVER PRINTS RESTS ON THAT ONE
+# JUDGEMENT. It is reversible: set both back to `pending` and recall returns to not
+# existing. Whoever quotes a recall figure must quote this paragraph with it.
+#
+# THE ONE REMAINING PENDING ROW is the shove at the top of this file
+# ("...резко начинают толкаться", 0-17.6s, hall_right). Nobody has ruled on it. `pending`
+# asserts nothing, keeps the clip scannable, carries the camera, contributes no TP/FP/FN,
+# and makes `eval gate` and `eval save-baseline` REFUSE. That refusal is still the point:
+# a baseline is not frozen until every interval has been judged, and one has not been.
+#
+# ONE INCIDENT OR TWO? Almost certainly ONE, seen from two cameras. 192.168.1.2 and
+# 192.168.1.4 are hall_right and hall_left -- both `profile: hall`, both configured with a
+# `mirror_ignore` zone, i.e. both looking at the same mirrored column the comments describe.
+# The descriptions match (a girl grips a boy's head and walks him to the mirror) and the
+# intervals overlap. It is NOT provable from what we have: the timestamps are clip-relative,
+# the clips are human-named with no wall clock, and the two runs differ (7.0s vs 10.5s).
+# So BOTH rows are kept -- they are two different video files and each needs its own row to
+# be scanned at all. THIS NOW MATTERS ARITHMETICALLY: both are `bullying`, so a naive count
+# of positives reads TWO and the corpus contains ONE. **This corpus has ONE confirmed
+# incident.** Anyone computing recall must count one positive seen twice, not two.
+# Question 4 in docs/questions-for-school.md.
+#
+# BROKEN TIMESTAMP (the 48th row, dropped). The sheet's `Норма` row for
+# "1.2 - подозрение на буллинг, девочка хватает за голову мальчика..." has t_end
+# `2.7777777777777779E-3` instead of mm:ss.ms. That is an Excel serial fraction of a day:
+# x86400 = exactly 240s = 4 minutes, which is Excel having read a typed "00:04.000" as
+# h:mm rather than the column's own mm:ss.ms. 240s is longer than any clip in the delivery
+# (the longest is 36.75s), so the value as stored is unusable. The intended value was
+# probably 4.00s, but "probably" is not a label: the row is DROPPED, not guessed. It costs
+# nothing measurable -- it is a `normal` row, and `normal` rows are documentation; every
+# second outside a bullying interval is negative already. Question 1 for the school.
+#
+# FIVE LABELLED CLIPS ARE NOT IN THE bullying_camera/ DELIVERY -- including the 1.2 view of
+# the head-grab above. All five are present, correctly named, in Bandicut/ (33 clips, a
+# superset of bullying_camera/'s 28). Their rows are kept here: `eval run` prints and skips
+# a label whose clip it cannot find, which is visible and honest, and pointing --clips at
+# the complete folder scores them with no edit to this file. Question 2.
+# ---------------------------------------------------------------------------------------
+1.2 - нет буллинга.mp4,0.0,9.88,normal,hall_right
+"1.2 - ученики стоят разговаривают и резко начинают толкаться, подозрение на буллинг.mp4",0.0,17.6,pending,hall_right
+# --- the school's spreadsheet, sheet row order (reasoning per row: eval/school_labels_2026-07.csv) ---
+01.mp4,0.00,36.20,normal,hall_right
+01.mp4,13.00,15.50,normal,hall_right
+02.mp4,0.00,22.20,normal,hall_right
+02.mp4,18.50,22.20,normal,hall_right
+"1.10 - дети забегают в класс, без агрессии.mp4",0.00,13.10,normal,stairs_floor2
+1.10 - ученики идут по коридору.mp4,2.00,20.00,normal,stairs_floor2
+"1.2 - дети бегая выходят из школы, подозрений нет.mp4",0.00,20.00,normal,hall_right
+"1.2 - мальчик в полосатом свитере поднял ногу на ученика, попытался пнуть.mp4",0.00,8.20,normal,hall_right
+"1.2 - мальчик в полосатом свитере поднял ногу на ученика, попытался пнуть.mp4",1.85,2.40,ignore,hall_right
+1.2 - обычная походку двоих учеников.mp4,0.00,8.00,normal,hall_right
+1.2 - обычный поход детей по двое .mp4,0.00,16.50,normal,hall_right
+"1.2 - подозрение на буллинг, девочка хватает за голову мальчика и удерживая отводит к зеркалу, удерживая голову.mp4",6.50,13.50,bullying,hall_right
+1.2 - скопление учеников у куллера воды и рядом с зеркалом по центру.mp4,0.00,9.00,normal,hall_right
+"1.2 - скопление учеников, некоторые из них стоят в обнику.mp4",0.00,16.20,normal,hall_right
+"1.2 - скопление учеников, некоторые из них стоят в обнику.mp4",2.00,14.00,normal,hall_right
+1.3 - дети во дворе школы бегают друг за другом.mp4,0.00,12.20,normal,yard_entry
+1.3 - дети во дворе школы бегают друг за другом.mp4,0.50,12.00,normal,yard_entry
+1.3 - дети выходят из школы .mp4,0.00,18.00,normal,yard_entry
+"1.3 - мужчина выходит на улицу, а двое учеников с улицы идут в сторону входа в школу.mp4",0.00,15.60,normal,yard_entry
+1.4 - бег ребенка.mp4,0.00,1.30,normal,hall_left
+"1.4 - девочки держась за руки проходят и выходят из школы, а двое мальчиков проходят в другую сторону коридора.mp4",0.00,9.00,normal,hall_left
+1.4 - девушка смотрит в зеркало и уходит.mp4,0.00,9.00,normal,hall_left
+"1.4 - дети  проходят, двое играясь друг друга бьют, убегают, двое стоят перед зеркалом в обнику.mp4",0.00,20.70,normal,hall_left
+"1.4 - дети  проходят, двое играясь друг друга бьют, убегают, двое стоят перед зеркалом в обнику.mp4",4.20,6.60,normal,hall_left
+"1.4 - дети  проходят, двое играясь друг друга бьют, убегают, двое стоят перед зеркалом в обнику.mp4",13.80,20.70,normal,hall_left
+"1.4 - дети выходят из школы, взявщись за руки.mp4",0.00,8.00,normal,hall_left
+1.4 - обычный проход детей по двое.mp4,0.00,15.30,normal,hall_left
+"1.4 - подозрение на буллинг, девочка хватает мальчика за голову и отводит в сторону зеркала.mp4",0.00,11.00,normal,hall_left
+"1.4 - подозрение на буллинг, девочка хватает мальчика за голову и отводит в сторону зеркала.mp4",5.50,16.00,bullying,hall_left
+"1.4 - скопление людей в правой стороне, нормальное поведение. двое мальчиков играются, бьют но видно что это не агрессия.mp4",0.00,59.00,normal,hall_left
+"1.4 - скопление людей в правой стороне, нормальное поведение. двое мальчиков играются, бьют но видно что это не агрессия.mp4",60.00,77.50,normal,hall_left
+"1.4 - скопление людей в правой стороне, нормальное поведение. двое мальчиков играются, бьют но видно что это не агрессия.mp4",64.00,68.00,normal,hall_left
+"1.64 - дети в правом углу коридора играются, без драк.mp4",0.00,9.00,normal,stairs_floor1
+"1.64 - дети идут разговаривая, играясь .mp4",0.00,12.60,normal,stairs_floor1
+"1.64 - дети идут разговаривая, играясь .mp4",2.00,8.00,normal,stairs_floor1
+"1.64 - скопление, без буллинга.mp4",0.00,8.00,normal,stairs_floor1
+"1.64 - ученик толкает другого, но дальше идут норально.mp4",0.00,8.50,normal,stairs_floor1
+"1.64 - ученик толкает другого, но дальше идут норально.mp4",4.70,5.30,ignore,stairs_floor1
+"1.64 - ученики в правом углу коридора выбегают из классов, один ребенок падает и дальше идет и подкатывает одного ученика.mp4",0.00,11.00,normal,stairs_floor1
+"1.64 - ученики в правом углу коридора выбегают из классов, один ребенок падает и дальше идет и подкатывает одного ученика.mp4",11.00,17.20,normal,stairs_floor1
+"1.64 - ученики выходят из класса, скопление но без буллинга.mp4",0.00,13.70,normal,stairs_floor1
+"192.168.1.11 - двое спускаются по лестнице, трое поднимаются, нет никакой агрессии.mp4",0.00,8.70,normal,stairs_floor2_aux
+192.168.1.11 - ученики поднимаются по лестнице на второй этаж.mp4,0.00,15.60,normal,stairs_floor2_aux
+192.168.1.2 - двое учеников идут.mp4,0.00,9.00,normal,hall_right
+"192.168.1.64 - двое идут по коридору, разговаривая.mp4",0.00,7.30,normal,stairs_floor1
+D02_20260513094658.mp4,0.00,13.20,normal,hall_right
+D02_20260513094658.mp4,0.00,13.20,normal,hall_right

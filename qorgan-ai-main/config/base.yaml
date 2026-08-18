@@ -1,0 +1,104 @@
+# Defaults shared by every camera, of every type. Exactly one place.
+#
+# Merge order:  base.yaml  <-  profiles/<profile>.yaml  <-  cameras/<name>.yaml
+# An unknown key anywhere in that chain is a startup error, not a silent default.
+#
+# There are no credentials in this file, or in any file under config/.
+# RTSP user/password come from the environment. See .env.example.
+
+rtsp:
+  port: 554
+  # Continuous analysis runs on the low-res substream (channel 102).
+  analysis_path: "/Streaming/Channels/102"
+  # The HD main stream (101), opened only in short bursts for evidence capture.
+  burst_path: "/Streaming/Channels/101"
+  reconnect_delay_seconds: 2.0
+
+  # How long the decoder may block on a camera that is not answering. MEASURED on this
+  # build of OpenCV, against an address that goes nowhere: with no timeout set, simply
+  # CONSTRUCTING the capture took 30.05 s; with the open timeout set it took 2.20 s.
+  #
+  # Those 30 s are not just a slow start. The reader thread is inside that call and does
+  # not look at its stop flag until it returns, so stopping a worker did not work: the
+  # supervisor's 10 s patience ran out, it killed the process, and the log said "worker
+  # ignored terminate" -- true, and pointing at the wrong thing. The camera had not
+  # answered.
+  #
+  # RAISING THESE SPENDS THE SHUTDOWN BUDGET. A group's worst case stop is
+  # max(open, read) + 3 s against a 10 s grace, and the worker prints a warning at
+  # startup if its own group no longer fits. Lowering them risks dropping a camera that
+  # was merely slow. 4 s is far above what a LAN camera needs and far below the grace.
+  #
+  # They also set how often a DOWN camera gets another try, and not one for one: OpenCV
+  # opens one stream at a time per process (measured: four threads opening at once, each
+  # with a 4 s timeout, came back at 4.05, 8.09, 12.12 and 16.17 s). In a group of four
+  # unreachable cameras each one therefore retries about every 16 s at this setting --
+  # where the old 30 s default made it two minutes.
+  open_timeout_seconds: 4.0
+  read_timeout_seconds: 4.0
+
+capture:
+  # THE ANALYSIS RESOLUTION. Both the worker (worker/camera_loop.py) and the eval
+  # harness (evaluation/video.py) resize every frame to exactly this, through the one
+  # shared function qorgan.capture.frames.prepare_frame().
+  #
+  # !!  CHANGING frame_width / frame_height INVALIDATES EVERY SPEED AND ACCELERATION
+  # !!  THRESHOLD IN EVERY PROFILE, AND THE MEASURED NOISE FLOOR WITH THEM.
+  #
+  # Speeds are px/SECOND. A pixel is not a unit of length; it is a unit of THIS frame.
+  # Halve the width and every speed halves, while every threshold stays where it was.
+  # If you change these, you must re-run `qorgan eval run` and `qorgan eval noise-floor`
+  # and re-derive the profiles. There is no shortcut and no conversion factor.
+  frame_width: 960
+  frame_height: 540
+
+  # WHAT THE NVR DELIVERS on the analysis channel (sub-stream 102). A fact about the
+  # cameras, not a policy about us -- which is exactly what the key it replaced was not.
+  #
+  # `display_fps` lived here and in four profiles at 5/8/10, and the production loop never
+  # read any of them: it processes one frame in every `det_every` THAT THE STREAM HANDS IT.
+  # So those numbers moved only the eval harness, which then computed noise floors and
+  # per-second rates for a loop running half again as fast. The harness graded production
+  # in units production does not use.
+  #
+  # 15 is the sub-stream rate reported by the camera's own web interface (1280x720 @
+  # 15 fps, 2048 Kbps -- handoff §2), read off cam 192.168.1.2. Two honest limits on it:
+  # it is a SCREENSHOT, not something this tree can re-run, and it was read off ONE camera.
+  # It is fleet-wide here rather than per-profile because there is no evidence any camera
+  # differs, and a per-profile override would assert a difference nobody has measured.
+  #
+  # It is not left to be trusted: the camera loop measures the delivered rate and warns
+  # when it disagrees with this key. On site, settle it in a minute with `ffprobe` on a
+  # live RTSP pull or an ISAPI `Streaming/channels/102` query, and correct this from what
+  # the warning reports.
+  stream_fps: 15
+  det_every: 1
+
+yolo:
+  model: "yolov8n.pt"
+  tracker: "bytetrack.yaml"
+  imgsz: 640
+  conf: 0.25
+  iou: 0.5
+
+# A CAMERA MAY READ A RECORDING INSTEAD OF ITS STREAM. Not set here, and not set on any
+# camera in this repository: it is opt-in, per camera, in config/cameras/<name>.yaml --
+# a `source:` left switched on in a shared file is a school watching a video of yesterday.
+#
+#   source:
+#     path: "clips/hall_2026-03-11.mp4"
+#     at_end: "loop"    # "loop" for a demonstration, "stop" for a run over the corpus
+#
+# Everything after the decode is unchanged: the same prepare_frame at this camera's own
+# analysis resolution, the same detector, the same thresholds, the same preview. The clip
+# is handed over at the rate its own container declares, so a wall-clock second is a second
+# of the scene that was filmed -- read the frame-rate note in src/qorgan/config/source.py
+# before wishing it went faster. `rtsp:` stays required and stays unread while this is set.
+
+# What the worker publishes to the web process. JPEG-encoded once, downscaled,
+# rate-limited. A slow browser must never slow down a detector.
+preview:
+  enabled: true
+  fps: 3.0
+  width: 640
+  jpeg_quality: 70

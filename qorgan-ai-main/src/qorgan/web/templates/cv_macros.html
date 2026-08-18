@@ -1,0 +1,178 @@
+{# Shared pieces of the classroom-analysis cabinet.
+
+   They are macros rather than four copies because the canteen learned what four hand-written
+   copies of one caveat cost: four chances for one of them to quietly stop being true. Three
+   things in particular may never be rendered by hand on these pages -- an unmeasured cell, a
+   demo marker, and the model's reading -- because each of them is a rule, not a style. #}
+
+{# A count, or the stated absence of one. `не измерялось` and `0` never look alike: one is
+   muted, dotted and carries no digit at all; the other is a digit with a marker when the zero
+   means «длительных эпизодов не набралось». The reason itself is printed once under the table
+   (see `footnotes`), not hidden in a title= that no printout and no phone will show. #}
+{% macro cell(c) %}
+  {%- if not c.measured -%}
+    <span class="cv-unmeasured">не измерялось</span>
+  {%- elif c.brief_only -%}
+    <span class="cv-brief">{{ c.text }}<sup>к</sup></span>
+  {%- else -%}
+    {{ c.text }}
+  {%- endif -%}
+{% endmacro %}
+
+{# Coverage never travels apart from the count it qualifies. #}
+{% macro coverage(percent) %}
+  {%- if percent is none -%}
+    <span class="cv-unmeasured">не измерялось</span>
+  {%- else -%}
+    <span class="cv-cov" style="--cov: {{ percent }}%">{{ percent | round(0) | int }}%</span>
+  {%- endif -%}
+{% endmacro %}
+
+{# The demo marker. Everywhere a synthetic row appears, on the row itself -- a fabricated number
+   that looks measured is the one unacceptable outcome of a demonstration. #}
+{% macro demo_tag(is_demo) %}
+  {#- Renders nothing, on the operator's instruction. Kept as a macro rather than deleted so
+      that every call site stays in one place: restoring the marker is one line here, not a
+      hunt through five templates. -#}
+{% endmacro %}
+
+{# The model's reading. Structure when the model was asked for one, prose when it is an older
+   note, and a STATED ABSENCE when there is none or the guard refused it -- never an empty box
+   and never an error. `guard_passed` is the whole gate: the note may contain no digit that is
+   not a place number, because the one failure measured in this system was a model attaching a
+   true number to the wrong claim. Every quantity on these pages comes from the table. #}
+{% macro reading_block(reading, only_place=none, subtitle='') %}
+<section class="cv-reading">
+  <h2>Расшифровка: на что смотреть в первую очередь
+    {% if subtitle %}<span class="muted">· урок {{ subtitle }}</span>{% endif %}</h2>
+  {% if reading is none %}
+    <p class="muted">Записки модели для этого урока нет. Это нормальный исход, а не ошибка:
+      отчёт полон без неё, и все числа на странице получены разбором, а не моделью.</p>
+  {% elif not reading.guard_passed %}
+    <p class="warning">Записка получена, но не показывается: она не прошла проверку на числа.
+      {{ reading.guard_reason_ru }}</p>
+  {% else %}
+    {% set payload = reading.payload or {} %}
+    {# Structured or prose is decided by the SCHEMA, not by whether the summary paragraph
+       survived. Keyed off `overview`, a reading whose summary was withheld for containing a
+       quantity fell through to the prose branch and printed the surviving sentences with no
+       structure and, worse, without the notice that something had been withheld. #}
+    {% if payload.get('schema') %}
+      {% if payload.get('overview') %}
+        <p class="cv-overview">{{ payload['overview'] }}</p>
+      {% endif %}
+      {# On a place page `only_place` keeps this place's note and drops the others: the note is
+         about a LESSON, and eight children's notes side by side on one child's page is the
+         comparison this system does not make. #}
+      {% set notes = payload.get('places') | selectattr('place', 'equalto', only_place) | list
+                     if only_place is not none else payload.get('places') %}
+      {% if notes %}
+        <h3>{{ 'Про это место' if only_place is not none else 'По местам' }}</h3>
+        <ul class="cv-notes">
+          {% for note in notes %}
+            <li><b>{{ note.get('label_ru') or 'место' }}</b> — {{ note.get('note') }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if payload.get('teacher') and only_place is none %}
+        <h3>Взрослый в комнате</h3>
+        <p>{{ payload['teacher'] }}</p>
+      {% endif %}
+      {% if payload.get('what_to_verify') %}
+        <h3>Что проверить в самой записи, прежде чем читать числа</h3>
+        <ul class="cv-notes">
+          {% for item in payload['what_to_verify'] %}<li>{{ item }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      {% if payload.get('not_measured') %}
+        <h3>О чём по этой записи сказать нельзя</h3>
+        <ul class="cv-notes">
+          {% for item in payload['not_measured'] %}<li>{{ item }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      {% if payload.get('withheld_fields') %}
+        <p class="warning">Часть текста не показана: в ней были числа.
+          {% for field in payload['withheld_fields'] %}
+            {{ field.get('field') }} — {{ field.get('reason_ru') }}{% if not loop.last %}; {% endif %}
+          {% endfor %}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="cv-overview">{{ reading.body }}</p>
+    {% endif %}
+    <details>
+      <summary>Откуда эта записка и что ей запрещено</summary>
+      <p>Модель {{ reading.model or '—' }}, промпт {{ reading.prompt_version }},
+         {{ reading.generated_at.strftime('%Y-%m-%d %H:%M') }}. {{ reading.guard_reason_ru }}</p>
+      <p>Записке запрещено содержать величины: ни минут, ни процентов, ни количества раз.
+         Причина измерена — модель, которой поручили пересказать числа, написала «сидел 96,5 %
+         (6,0 минуты)», соединив два настоящих числа в одно неверное утверждение, и проверка
+         существования числа такого поймать не может. Поэтому числа здесь берутся только из
+         таблицы, а модель отвечает лишь на вопрос «куда посмотреть».</p>
+      <p>Записка не ставит диагнозов, не сравнивает детей между собой, не даёт рекомендаций и не
+         говорит о вовлечённости, интересе или внимании: камера этого не видит.</p>
+    </details>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{# One list of lessons. Called twice on the index -- once for the measured lessons and once for
+   the demonstration -- from two separate collections, so no total on that page can mix them. #}
+{% macro lesson_table(rows, empty_ru) %}
+{% if not rows %}
+  <p class="muted">{{ empty_ru }}</p>
+{% else %}
+<div class="cv-scroll">
+<table>
+  <thead>
+    <tr>
+      <th>дата</th><th>неделя</th><th>комната</th><th>класс</th>
+      <th>длительность</th><th>ученических мест</th>
+      <th>видимость: медиана / минимум</th><th>часы записи</th><th>кадры</th><th>расшифровка</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="/psychologist/lessons/{{ row.id }}">{{ row.date_ru }}</a>
+        {% if row.part_count > 1 %}<span class="tag">{{ row.part_count }} файла</span>{% endif %}
+        {% if row.overlap_allowed %}<span class="tag failed">пересечение</span>{% endif %}
+      </td>
+      <td class="muted">{{ row.iso_week }}</td>
+      <td>{{ row.camera_key }}</td>
+      <td>{{ row.class_key }}</td>
+      <td>{{ row.duration_minutes }} мин</td>
+      <td>{{ row.pupil_places }}</td>
+      <td>{{ coverage(row.coverage_median) }} / {{ coverage(row.coverage_min) }}</td>
+      {# Not decoration: «overlay» means the clock was read off the picture, «filename» means it
+         came from the file's name, and «unknown» means the lesson is in no week at all. #}
+      <td class="muted">{{ row.clock_source }}</td>
+      <td>
+        {% if row.frames %}
+          <a href="/psychologist/lessons/{{ row.id }}/frames">{{ row.frames }} кадров</a>
+        {% else %}
+          <span class="cv-unmeasured">нет</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if row.has_reading %}<span class="tag running">есть</span>
+        {% else %}<span class="muted">нет</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# The sentences the cells above need, printed once, under the table they belong to. #}
+{% macro footnote_list(notes) %}
+  {% if notes %}
+  <details class="cv-footnotes">
+    <summary>Почему в части клеток стоит «не измерялось» и что значит «к» у нуля — {{ notes | length }}
+      {{ 'пояснение' if notes | length == 1 else 'пояснения' }}</summary>
+    <ul>{% for note in notes %}<li>{{ note }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+{% endmacro %}

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Qorgan AI{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+</head>
+<body>
+{#- WHICH SECTION IS THE CURRENT ONE.
+
+    Taken from the path the router already matched (`request.url.path`), so the mark and the
+    page cannot disagree — the same rule the capability checks below follow, and the reason
+    the landing link is computed in `web/templating.py` rather than guessed here.
+
+    Prefix matching, because sections have child pages: /psychologist covers
+    /psychologist/pupils/7. A plain `startswith` per link would mark TWO items on
+    /psychologist/classes/8-А — /psychologist matches it too — so the longest matching href
+    is chosen ONCE here and each link then compares for equality. `/` is excluded from
+    prefix matching for the obvious reason: every path starts with it. -#}
+{%- set here = request.url.path -%}
+{%- set sections = ['/cameras', '/events', '/weapons', '/notifications', '/canteen',
+                    '/lessons', '/psychologist/classes', '/psychologist/lessons',
+                    '/psychologist/places', '/psychologist', '/logs', '/settings',
+                    '/backups', '/pupils', '/users', '/schools'] -%}
+{%- set found = namespace(href='/' if here == '/' else '') -%}
+{%- for candidate in sections -%}
+  {%- if (here == candidate or here.startswith(candidate ~ '/'))
+         and candidate | length > found.href | length -%}
+    {%- set found.href = candidate -%}
+  {%- endif -%}
+{%- endfor -%}
+{#- A place page belongs to the classroom-analysis section: it is reached from a class and
+    it is the third step of that walk, not a section of its own. -#}
+{%- if found.href == '/psychologist/places' -%}{%- set found.href = '/psychologist/classes' -%}{%- endif -%}
+
+{%- macro nav(href, label) -%}
+  <li><a href="{{ href }}"{% if href == found.href %} aria-current="page"{% endif %}>{{ label }}</a></li>
+{%- endmacro -%}
+
+  {# ONE `{% block content %}`, always. Jinja refuses a block defined twice, and the first
+     cut of this file had one inside the signed-in branch and another in the `else` — so the
+     sign-in page, the only page with no sidebar, took the whole application down. The shell
+     is always here; it simply has nothing in its first column when nobody is signed in. #}
+  {% if user %}
+  {# The masthead moved to the side. Fifteen top-level sections never fitted across a row —
+     the labels are two and three Russian words each — and a strip that scrolls sideways is
+     a strip whose far end nobody finds. Down the side they all fit at once, they can be
+     GROUPED by what they are for, and a section with children can show them nested instead
+     of hiding them behind a click. #}
+  <a class="skip" href="#main">К содержимому</a>
+  {% endif %}
+  <div class="shell{{ '' if user else ' shell-bare' }}">
+  {% if user %}
+  <aside class="sidebar">
+    {# Where this role's login lands, computed once in `web/templating.py` from the same
+       `landing_for` that `login()` redirects to. It used to be decided in this template —
+       `/` if the role held view_cameras, else `/canteen` — a second source of truth that
+       was simply wrong for the superadmin, who holds neither. #}
+    <a class="brand" href="{{ landing }}">Qorgan AI</a>
+
+    <nav class="sidenav" aria-label="Разделы">
+      {% set watching = [] %}
+      {% if 'view_cameras' in capabilities %}{% set _ = watching.append(1) %}{% endif %}
+      {% if 'view_bullying' in capabilities %}{% set _ = watching.append(1) %}{% endif %}
+      {% if 'view_weapons' in capabilities %}{% set _ = watching.append(1) %}{% endif %}
+      {% if watching %}
+      <p class="sidenav-group">Наблюдение</p>
+      <ul>
+        {% if 'view_cameras' in capabilities %}{{ nav("/", "Камеры") }}{% endif %}
+        {# Same capability, because it is the same live frames of the same corridors. A nav
+           link a role cannot follow is a 403 the school reports as a broken system. #}
+        {% if 'view_cameras' in capabilities %}{{ nav("/cameras", "Состояние камер") }}{% endif %}
+        {% if 'view_bullying' in capabilities %}{{ nav("/events", "События") }}{% endif %}
+        {# §12.1. A separate page from События rather than a filter on it: on a weapon row
+           `skeleton_confirmed` is false because there IS no pose tier in that pipeline, and
+           /events renders false as «скелет ✗» — a statement nobody made. #}
+        {% if 'view_weapons' in capabilities %}{{ nav("/weapons", "Оружие") }}{% endif %}
+        {# Same capability as События, because it is the same disclosure told from the
+           delivery side — see web/routes/notifications.py. #}
+        {% if 'view_bullying' in capabilities %}{{ nav("/notifications", "Уведомления") }}{% endif %}
+      </ul>
+      {% endif %}
+
+      {% if 'view_canteen' in capabilities or 'view_pupils' in capabilities
+            or 'view_lesson_metrics' in capabilities %}
+      <p class="sidenav-group">Школа</p>
+      <ul>
+        {% if 'view_canteen' in capabilities %}{{ nav("/canteen", "Столовая") }}{% endif %}
+        {% if 'view_pupils' in capabilities %}{{ nav("/pupils", "Ученики") }}{% endif %}
+        {# Only ADMIN holds this one — see roles.py on why the readership for numbers whose
+           thresholds have never been validated starts as small as possible. #}
+        {% if 'view_lesson_metrics' in capabilities %}{{ nav("/lessons", "Уроки") }}{% endif %}
+      </ul>
+      {% endif %}
+
+      {% if 'view_psychologist_cabinet' in capabilities or 'view_classroom_analysis' in capabilities %}
+      <p class="sidenav-group">Психолог</p>
+      <ul>
+        {# Held by the PSYCHOLOGIST and by ADMIN; the notes inside it are a separate grant
+           that ADMIN does not have — see roles.py. #}
+        {% if 'view_psychologist_cabinet' in capabilities %}{{ nav("/psychologist", "Кабинет") }}{% endif %}
+        {% if 'view_classroom_analysis' in capabilities %}
+        {# A SEPARATE capability from the cabinet above: the cabinet's notes are a
+           confidential record about a named child, while these pages observe a PLACE and
+           carry no name at all until somebody signs a seating plan. Two disclosures, two
+           grants. Its children are shown NESTED rather than hidden — «Классы» is where the
+           walk starts and «Уроки» is the same material sorted by recording. #}
+        {{ nav("/psychologist/classes", "Разбор уроков") }}
+        <li class="sidenav-sub{{ ' open' if found.href in ('/psychologist/classes', '/psychologist/lessons') }}">
+          <ul>
+            {{ nav("/psychologist/classes", "Классы") }}
+            {{ nav("/psychologist/lessons", "Уроки и записи") }}
+          </ul>
+        </li>
+        {% endif %}
+      </ul>
+      {% endif %}
+
+      {% if 'view_diagnostics' in capabilities or 'view_settings' in capabilities
+            or 'view_backups' in capabilities or 'manage_users' in capabilities
+            or 'manage_schools' in capabilities %}
+      <p class="sidenav-group">Система</p>
+      <ul>
+        {% if 'view_diagnostics' in capabilities %}{{ nav("/logs", "Логи") }}{% endif %}
+        {% if 'view_settings' in capabilities %}{{ nav("/settings", "Настройки") }}{% endif %}
+        {% if 'view_backups' in capabilities %}{{ nav("/backups", "Резервные копии") }}{% endif %}
+        {# Drawn from the same table the route is gated on. Two sources of truth would mean
+           an operator clicking here into a 403 and reporting the system as broken. #}
+        {% if 'manage_users' in capabilities %}{{ nav("/users", "Пользователи") }}{% endif %}
+        {# §14's "управление школами", held by SUPERADMIN alone — so no school's own staff
+           ever sees a link to the register of the other schools. #}
+        {% if 'manage_schools' in capabilities %}{{ nav("/schools", "Школы") }}{% endif %}
+      </ul>
+      {% endif %}
+    </nav>
+
+    <div class="session">
+      <span class="who">
+        <span class="who-name">{{ user.username }}</span>
+        <span class="who-role">{{ user.role.value }}</span>
+      </span>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="link">Выйти</button>
+      </form>
+    </div>
+  </aside>
+  {% endif %}
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+  </div>
+
+  <script src="/static/tabs.js" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
