@@ -5,7 +5,7 @@
 # that looks alive and is not:
 #
 #   1. bind the platform's $PORT and $HOST,
-#   2. put the writable state on the mounted volume,
+#   2. take ownership of the mounted volume and DROP ROOT,
 #   3. refuse early if the signing key is missing,
 #   4. bring the schema to head,
 #   5. optionally create the FIRST account, once, and only when asked.
@@ -30,6 +30,30 @@ export WEB_HOST="${WEB_HOST:-0.0.0.0}"
 #    media and the logs must live on the volume. Mount it at $QORGAN_STATE_DIR.
 # ---------------------------------------------------------------------------
 STATE="${QORGAN_STATE_DIR:-/state}"
+
+# **TAKE THE MOUNT, THEN GIVE UP ROOT.** The platform mounts the volume owned by root, over
+# the top of whatever the image prepared, so a container that was already `nobody` could not
+# create one directory inside it and restarted forever:
+#
+#     mkdir: cannot create directory '/state/data': Permission denied
+#
+# So the container starts as root, claims the mount, and re-executes ITSELF as `nobody`
+# before anything else happens. Everything below this block — the migration, the first
+# account, uvicorn — runs unprivileged, which is the point: this process serves photographs
+# of children and has no business being root while it does it.
+#
+# `exec` replaces the shell rather than spawning under it, so PID 1 stays the real process
+# and the platform's stop signal reaches it. The guard is `id -u`, so a second pass (already
+# `nobody`) falls straight through instead of looping.
+APP_UID="${QORGAN_UID:-65534}"
+APP_GID="${QORGAN_GID:-65534}"
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p "$STATE/data" "$STATE/media" "$STATE/logs"
+  chown -R "$APP_UID:$APP_GID" "$STATE"
+  log "том $STATE принят, права сброшены до uid=$APP_UID"
+  exec setpriv --reuid="$APP_UID" --regid="$APP_GID" --clear-groups "$0" "$@"
+fi
+
 mkdir -p "$STATE/data" "$STATE/media" "$STATE/logs"
 export DATABASE_URL="${DATABASE_URL:-sqlite+pysqlite:///$STATE/data/qorgan.sqlite3}"
 export MEDIA_ROOT="${MEDIA_ROOT:-$STATE/media}"

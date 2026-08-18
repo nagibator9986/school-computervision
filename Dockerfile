@@ -50,9 +50,19 @@ RUN chmod +x /usr/local/bin/qorgan-entrypoint
 ENV QORGAN_STATE_DIR=/state
 RUN mkdir -p /state && chown -R nobody:nogroup /state
 
-# Not root. The dashboard serves children's photographs; a process that does not need to
-# write outside its state directory should not be able to.
-USER nobody
+# **THE CONTAINER STARTS AS ROOT AND DOES NOT STAY ROOT.** There is no `USER` line here,
+# and that is deliberate rather than an omission: Railway mounts the volume OWNED BY ROOT,
+# over the top of the directory prepared above, so a process that was already `nobody`
+# could not create a single directory inside it —
+#
+#     mkdir: cannot create directory '/state/data': Permission denied
+#
+# and the service restarted forever. The entrypoint therefore takes ownership of the mount
+# and then drops to `nobody` with `setpriv` before anything else runs. The Python process
+# is still unprivileged; only the four lines that prepare the mount are not.
+#
+# The alternative — leaving the whole dashboard running as root — would have been one word
+# shorter and is not on offer: this process serves photographs of children.
 
 # Документирующая пометка, и только: uvicorn слушает $PORT, который выдаёт платформа
 # (Railway даёт 8080), а точка входа переносит его в WEB_PORT. Значение 8000 здесь
