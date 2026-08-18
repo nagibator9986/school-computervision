@@ -101,7 +101,7 @@ class ImportResult:
         lines = [
             f"{self.run_id}: записано ({mark}). Урок #{self.lesson_id}, мест {self.places} "
             f"(новых {self.new_places}, без привязки {self.unmatched}), "
-            f"с именем {self.named} — только по подписанному плану рассадки.",
+            f"с именем {self.named} — только там, где имя поставил человек.",
             f"  взрослый: {'записан' if self.teacher else 'не записан'}",
         ]
         lines += [f"  не записано: {reason}" for reason in self.dropped]

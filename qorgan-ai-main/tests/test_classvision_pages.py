@@ -10,8 +10,11 @@ crash and a suite that catches it, so every test below builds a world first.
 **What is pinned here, beyond «it renders».** The seat/name discipline, in both directions:
 
   * an UNSIGNED place is named as a place, refuses the weekly trend, and says why;
-  * a SIGNED place names the child, and states in the same breath that the name comes from a
-    signed seating plan rather than from face recognition.
+  * a SIGNED place names the child, and states in the same breath WHO put the name there and
+    on what basis — both read from the row, never asserted. The page used to claim «по
+    подписанному плану рассадки» whatever the row held, which was true of every attestation
+    that existed when it was written and false the first time one was signed on other
+    grounds.
 
 Those two are one rule seen from its two sides, and a page that got either backwards would
 still return 200. The first version of `cv_place.html` did get it backwards -- it declared
@@ -193,8 +196,13 @@ def test_a_signed_place_names_the_child_and_says_where_the_name_came_from(
 
     assert page.status_code == 200
     assert "Асанов Арман" in page.text
-    assert "подписанному плану рассадки" in page.text
-    assert "классный руководитель" in page.text
+    # The page must state WHO decided and ON WHAT BASIS — reading both from the row rather
+    # than asserting one origin. The earlier version pinned the phrase «подписанному плану
+    # рассадки», which made the test pass while the page claimed a provenance it never read:
+    # sign on any other basis and the sentence became false with nothing failing.
+    assert "имя на этой странице поставил" in page.text.lower()
+    assert "классный руководитель" in page.text       # attested_by, from the row
+    assert "план рассадки 8-А" in page.text           # decision_ref, from the row
     assert "местом, а не ребёнком" not in page.text, (
         "the page names the child and still declares there is no seating plan. That "
         "contradiction shipped once; it is the reason this assertion is here.")
@@ -284,7 +292,7 @@ def test_the_cabinet_opens_on_classes_not_on_a_child(
 
     assert page.status_code == 200
     assert "8-А" in page.text
-    assert "плана рассадки нет" in page.text, (
+    assert "имён нет" in page.text, (
         "an unsigned class must say so on the card: it is the fact that decides whether the "
         "pages behind it may name a child at all.")
 
@@ -306,8 +314,11 @@ def test_a_class_page_groups_pupils_by_room_and_states_each_plan(
 
     assert page.status_code == 200
     assert "Комната camera_09" in page.text
-    assert "план рассадки подписан" in page.text
-    assert "классный руководитель" in page.text
+    # WHO and ON WHAT BASIS, both read from the row. Pinning a fixed phrase like «план
+    # рассадки подписан» is what let the page claim a provenance it never looked at.
+    assert "имена проставил человек" in page.text
+    assert "классный руководитель" in page.text       # attested_by
+    assert "план рассадки 8-А" in page.text           # decision_ref
     assert "Асанов Арман" in page.text
     # And the third step of the walk is reachable from here.
     assert f'/psychologist/places/{place.id}' in page.text

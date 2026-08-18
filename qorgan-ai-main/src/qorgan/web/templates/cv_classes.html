@@ -9,8 +9,8 @@
    «место 7». The previous entry point was a flat list of recordings, which made the first
    step of every walk a guess about which chair a child sat in. #}
 <p class="cv-lede">
-  Единица учёта — <b>место в классе, а не ребёнок</b>. Имя появляется только там, где школа
-  письменно подтвердила план рассадки; до этого страница называет место местом. Ниже —
+  Единица учёта — <b>место в классе, а не ребёнок</b>. Имя появляется только там, где его
+  поставил <b>человек</b> и назвал основание; до этого страница называет место местом. Ниже —
   классы, по которым есть разобранные записи.
 </p>
 
@@ -36,7 +36,7 @@
   </div>
   <div class="tile {{ 'ok' if rows | sum(attribute='attested_places') else 'alert' }}">
     <span class="value">{{ rows | sum(attribute='attested_places') }}</span>
-    <span class="label">мест с подписанным планом рассадки</span>
+    <span class="label">мест, где имя поставил человек</span>
   </div>
 </div>
 
@@ -59,11 +59,11 @@
     {# The seating plan is the whole difference between a page about chairs and a page about
        children, so it is the last line of every card and it is a word, not a colour. #}
     {% if row.fully_attested %}
-    <span class="class-card-plan ok">план рассадки подписан — {{ row.attested_places }} из {{ row.pupil_places }}</span>
+    <span class="class-card-plan ok">имена проставлены — {{ row.attested_places }} из {{ row.pupil_places }} мест</span>
     {% elif row.attested_places %}
-    <span class="class-card-plan part">подписано {{ row.attested_places }} из {{ row.pupil_places }} мест</span>
+    <span class="class-card-plan part">имена проставлены на {{ row.attested_places }} из {{ row.pupil_places }} мест</span>
     {% else %}
-    <span class="class-card-plan none">плана рассадки нет — учёт по местам</span>
+    <span class="class-card-plan none">имён нет — учёт по местам</span>
     {% endif %}
   </a>
   {% endfor %}

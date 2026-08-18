@@ -25,7 +25,7 @@
   </div>
   <div class="tile {{ 'ok' if named_places == pupil_places and pupil_places else 'alert' }}">
     <span class="value">{{ named_places }}</span>
-    <span class="label">мест с подписанным планом</span>
+    <span class="label">мест, где имя поставил человек</span>
   </div>
   <div class="tile">
     <span class="value">
@@ -50,18 +50,23 @@
   {% for group in groups %}
   <div class="room">
     <h2>Комната {{ group.camera_key }}</h2>
+    {# The chip says only what holds for every attestation — a PERSON put the names here —
+       and the basis is printed from `decision_ref` beside it. It used to read «план
+       рассадки подписан» whatever the row held: true while a seating plan was the only
+       basis anyone had signed on, false the first time somebody signed on another, and
+       nothing would have failed. #}
     {% if group.attested %}
     <p class="meta">
-      <span class="tag ok">план рассадки подписан</span>
+      <span class="tag ok">имена проставил человек</span>
       Подписал: {{ group.signed_by }}. Основание: {{ group.decision_ref }}.
       Действует с {{ group.valid_from_ru }}.
     </p>
     {% else %}
     <p class="meta">
-      <span class="tag">плана рассадки нет</span>
+      <span class="tag">имён нет</span>
       Места этой комнаты названы местами, а не детьми. Ни лицо, ни трекер имени здесь не
-      создают: динамика по неделям — это утверждение о ребёнке, и она появится только
-      после подписанного плана.
+      создают: динамика по неделям — это утверждение о ребёнке, и она появится только после
+      того, как имя поставит человек и назовёт основание.
     </p>
     {% endif %}
 

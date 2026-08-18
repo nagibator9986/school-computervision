@@ -218,8 +218,12 @@ def _apply_to_stored(session: Session, *, school_id: int, place_id: int, person_
     ).all()
 
     named = undated = 0
-    reason = (f"имя проставлено по подписанному плану рассадки: подписал {attested_by}, "
-              f"основание — {decision_ref}.")
+    # The reason stored on each observation NAMES THE BASIS RATHER THAN ASSUMING ONE. It used
+    # to say «по подписанному плану рассадки» whatever `decision_ref` actually held — true
+    # while every attestation was a seating plan, and false the moment one was signed on some
+    # other ground. What holds either way is that a named person decided; what the ground was
+    # is `decision_ref`, and it is quoted rather than described.
+    reason = (f"имя проставил человек: {attested_by}. Основание — {decision_ref}.")
     for row, date_local in rows:
         if date_local is None:
             undated += 1

@@ -12,8 +12,16 @@
 {# The name is here because a person signed for it. That sentence has to sit next to the name
    itself: a heading with a child's name and the justification three screens down is a heading
    that will be read as face recognition, which is the one thing this system does not do. #}
-<p class="cv-lede">Имя на этой странице стоит по <b>подписанному плану рассадки</b>, а не по
-  распознаванию лица. Единица учёта — место; кто на нём сидит, письменно подтвердил человек.
+{# THE SENTENCE STATES WHAT WAS RECORDED, NOT ONE FIXED ORIGIN.
+
+   It used to read «имя стоит по подписанному плану рассадки, а не по распознаванию лица» —
+   true of every attestation that existed when it was written, and FALSE the first time an
+   operator signed on a different basis. That is the shape of claim this project keeps
+   catching elsewhere: a page asserting a provenance it does not read. The basis is in
+   `decision_ref`, so the page prints that and says only what holds either way — that a
+   PERSON put the name here, and that nothing automatic did. #}
+<p class="cv-lede">Имя на этой странице поставил <b>человек</b>, и оно держится на его
+  основании. Ни лицо, ни трекер имени здесь не создают: единица учёта — место.
   <br><span class="muted">Подписал: {{ signature.attested_by }}. Основание:
     {{ signature.decision_ref }}. Действует с {{ signature.valid_from_ru }}.</span></p>
 {% elif is_pupil %}
