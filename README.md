@@ -13,6 +13,16 @@
 панель читает командой `qorgan classvision import`. Контракт описан в
 [`classvision/INTEGRATION.md`](classvision/INTEGRATION.md).
 
+## Как всё устроено
+
+[**ARCHITECTURE.md**](ARCHITECTURE.md) — обзор обеих систем: что куда идёт, почему они
+разделены и что система принципиально не делает. Дальше по разделам:
+[анализатор](docs-architecture/01-analyser.md) ·
+[платформа](docs-architecture/02-platform.md) ·
+[контракт между ними](docs-architecture/03-contract.md) ·
+[решения, которые нельзя упрощать](docs-architecture/04-decisions.md) ·
+[как дорабатывать](docs-architecture/05-extending.md).
+
 ## Развёртывание
 
 Панель разворачивается на Railway контейнером: [**DEPLOY-RAILWAY.md**](qorgan-ai-main/DEPLOY-RAILWAY.md).
