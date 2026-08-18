@@ -54,6 +54,9 @@ RUN mkdir -p /state && chown -R nobody:nogroup /state
 # write outside its state directory should not be able to.
 USER nobody
 
-EXPOSE 8000
+# Документирующая пометка, и только: uvicorn слушает $PORT, который выдаёт платформа
+# (Railway даёт 8080), а точка входа переносит его в WEB_PORT. Значение 8000 здесь
+# расходилось с тем, что видит оператор в списке портов, и читалось как противоречие.
+EXPOSE 8080
 ENTRYPOINT ["qorgan-entrypoint"]
 CMD ["web"]
