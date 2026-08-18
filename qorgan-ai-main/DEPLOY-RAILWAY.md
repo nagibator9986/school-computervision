@@ -13,14 +13,22 @@ import`. Именно поэтому кабинет психолога на Rail
 
 ## 1. Что уже готово в репозитории
 
-| Файл | Что делает |
-|---|---|
-| `Dockerfile` | Образ панели: Python 3.11-slim, без torch, без ultralytics, **без opencv** |
-| `deploy/requirements-web.txt` | Точный список зависимостей панели, и почему из него убран opencv |
-| `deploy/railway-entrypoint.sh` | Порт, том, миграции, первичная учётная запись — в этом порядке |
-| `railway.json` | Сборка через Dockerfile, health-check на `/healthz` |
-| `.dockerignore` | Не пускает в образ фотографии детей, записи, секреты и `data/` |
-| `.env.railway.example` | Шпаргалка по переменным окружения |
+| Файл | Где лежит | Что делает |
+|---|---|---|
+| `Dockerfile` | **корень репозитория** | Образ панели: Python 3.11-slim, без torch, без ultralytics, **без opencv** |
+| `railway.json` | **корень репозитория** | Сборка через Dockerfile, health-check на `/healthz` |
+| `.dockerignore` | **корень репозитория** | Не пускает в образ фотографии детей, записи, секреты, `data/` и весь `classvision/` |
+| `deploy/requirements-web.txt` | `qorgan-ai-main/` | Точный список зависимостей панели, и почему из него убран opencv |
+| `deploy/railway-entrypoint.sh` | `qorgan-ai-main/` | Порт, том, миграции, первичная учётная запись — в этом порядке |
+| `.env.railway.example` | `qorgan-ai-main/` | Шпаргалка по переменным окружения |
+
+> **Почему Dockerfile лежит в корне, а не рядом с пакетом.** В репозитории два пакета, и
+> Railway собирает из корня. Пока `Dockerfile` и `railway.json` лежали внутри
+> `qorgan-ai-main/`, платформа их не находила, передавала сборку автоопределителю и падала:
+> «Railpack could not determine how to build the app» — он видел две папки, README и
+> .gitignore. Теперь настраивать Root Directory в интерфейсе не нужно: репозиторий
+> разворачивается как есть. Контекст сборки — корень, поэтому все `COPY` в Dockerfile
+> написаны от него, а `classvision/` исключён `.dockerignore` целиком.
 
 Образ **собран и проверен локально**: 437 МБ, контейнер стартует, миграции проходят,
 вход работает, база ложится на том.
@@ -34,9 +42,13 @@ import`. Именно поэтому кабинет психолога на Rail
 ```bash
 npm i -g @railway/cli
 railway login
-cd qorgan-ai-main
-railway init
+railway init          # из КОРНЯ репозитория, не из qorgan-ai-main
 ```
+
+Если сервис уже создан и падал на `Railpack could not determine how to build the app` —
+достаточно затянуть текущий `main`: `Dockerfile` и `railway.json` теперь в корне, и
+автоопределитель больше не задействуется. Root Directory в настройках сервиса оставьте
+пустым.
 
 ### 2.2. Подключить том — **до первого развёртывания**
 
@@ -75,8 +87,11 @@ BOOTSTRAP_ADMIN_PASSWORD=<длинный пароль>
 ### 2.4. Развернуть
 
 ```bash
-railway up
+railway up            # из корня репозитория
 ```
+
+Сборка проверена локально из того же корня: образ 433 МБ, контейнер стартует, миграции
+проходят, вход работает, база и медиа ложатся на том.
 
 ### 2.5. Первый вход и сразу после него
 

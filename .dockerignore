@@ -1,0 +1,60 @@
+# Build context = THE REPOSITORY ROOT, so these paths are written from there.
+# Everything a container has no business carrying — and, first, everything it must never
+# carry off this machine.
+
+# Children's photographs, school footage, and the biometrics computed from them. The
+# .gitignore names these for the same reason; a build context is another way to copy a
+# directory somewhere it should not go.
+student_photos/
+original_student_photos/
+*_student_photos/
+**/media/
+**/data/
+**/logs/
+**/.cache/
+*.mp4
+*.mov
+*.avi
+*.npz
+*.npy
+*.pkl
+roster.csv
+eval/clips/
+eval/crops/
+**/eval/clips/
+**/eval/crops/
+
+# The offline analyser. It runs on a machine with a GPU, never in this container, and it
+# pulls torch and ultralytics — the AGPL dependency `classvision/THIRD_PARTY_LICENSES.md`
+# keeps deliberately out of anything network-served.
+classvision/
+
+# Model weights: hundreds of megabytes the dashboard never loads.
+*.pt
+*.onnx
+
+# Secrets. Railway supplies configuration as environment variables; a baked .env would both
+# leak and silently outrank them.
+.env
+.env.*
+!.env.example
+!.env.railway.example
+
+# Local tooling and caches.
+.venv*/
+**/node_modules/
+**/__pycache__/
+*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+.git/
+.DS_Store
+out/
+
+# Development-only material.
+**/tests/
+**/docs/
+qorgan-ai-main/deploy/*.bat
+qorgan-ai-main/deploy/*.ps1
+qorgan-ai-main/deploy/*.xml
